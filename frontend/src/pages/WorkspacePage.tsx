@@ -148,6 +148,9 @@ export function WorkspacePage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState<ActionToastState | null>(null);
+  const [previewViewport, setPreviewViewport] = useState<
+    "mobile" | "tablet" | "desktop"
+  >("desktop");
   const scheduleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -385,6 +388,12 @@ export function WorkspacePage() {
       (variant) => variant.template.id === selectedTemplateId,
     ) ?? previewVariants[0];
   const previewEmail = activeVariant?.previews[0];
+  const previewViewportClass =
+    previewViewport === "mobile"
+      ? "md:max-w-[390px]"
+      : previewViewport === "tablet"
+        ? "md:max-w-[768px]"
+        : "md:max-w-none";
 
   const validateBeforeSubmit = () => {
     if (senderMode === "gmail" && !gmailAddress.trim()) {
@@ -1222,23 +1231,51 @@ export function WorkspacePage() {
                         it.
                       </p>
                     </div>
-                    <button
-                      className="inline-flex items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] px-5 py-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#052113] transition hover:-translate-y-0.5 disabled:opacity-70"
-                      disabled={busyAction === "send"}
-                      onClick={() => void handleSend()}
-                      type="button"
-                    >
-                      <Mail
-                        className={
-                          busyAction === "send"
-                            ? "h-4 w-4 animate-pulse"
-                            : "h-4 w-4"
-                        }
-                      />
-                      <span>
-                        {busyAction === "send" ? "Sending" : "Send email"}
-                      </span>
-                    </button>
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      <div className="hidden items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-1 md:inline-flex">
+                        {[
+                          { id: "mobile", label: "Mobile" },
+                          { id: "tablet", label: "Tab" },
+                          { id: "desktop", label: "Desktop" },
+                        ].map((option) => (
+                          <button
+                            className={cn(
+                              "rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] transition",
+                              previewViewport === option.id
+                                ? "bg-[rgba(var(--accent-rgb),0.18)] text-[var(--accent)]"
+                                : "text-[var(--soft)] hover:text-[var(--text)]",
+                            )}
+                            key={option.id}
+                            onClick={() =>
+                              setPreviewViewport(
+                                option.id as "mobile" | "tablet" | "desktop",
+                              )
+                            }
+                            type="button"
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] px-5 py-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#052113] transition hover:-translate-y-0.5 disabled:opacity-70"
+                        disabled={busyAction === "send"}
+                        onClick={() => void handleSend()}
+                        type="button"
+                      >
+                        <Mail
+                          className={
+                            busyAction === "send"
+                              ? "h-4 w-4 animate-pulse"
+                              : "h-4 w-4"
+                          }
+                        />
+                        <span>
+                          {busyAction === "send" ? "Sending" : "Send email"}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1263,12 +1300,23 @@ export function WorkspacePage() {
                         <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
                           Message body
                         </p>
-                        <div className="mt-4 max-h-[36rem] overflow-auto rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface-strong)] p-5 text-sm leading-7 text-[var(--muted)] scrollbar-thin">
-                          <div
-                            dangerouslySetInnerHTML={{
-                              __html: previewEmail.html_body,
-                            }}
-                          />
+                        <div className="mt-2 text-xs font-semibold text-[var(--soft)] md:hidden">
+                          Mobile preview is shown on small screens.
+                        </div>
+                        <div
+                          className={cn(
+                            "mx-auto mt-4 overflow-hidden rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface-strong)]",
+                            "max-w-[390px]",
+                            previewViewportClass,
+                          )}
+                        >
+                          <div className="max-h-[36rem] overflow-auto p-5 text-sm leading-7 text-[var(--muted)] scrollbar-thin">
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: previewEmail.html_body,
+                              }}
+                            />
+                          </div>
                         </div>
                         <div className="mt-4 border-t border-[var(--line)] pt-4">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">

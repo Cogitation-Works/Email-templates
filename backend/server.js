@@ -248,11 +248,16 @@ app.get(
       const user = await authenticateRequest(getDb(), req);
       res.json({ user });
     } catch (error) {
-      if (error && typeof error === "object" && error.status === 401) {
-        res.json({ user: null });
-        return;
+      if (error && typeof error === "object") {
+        const maybeError = error;
+        if (maybeError.status === 401) {
+          res.json({ user: null });
+          return;
+        }
       }
-      throw error;
+
+      clearSessionCookie(res);
+      res.json({ user: null });
     }
   }),
 );

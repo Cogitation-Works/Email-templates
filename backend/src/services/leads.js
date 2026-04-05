@@ -22,7 +22,18 @@ const {
 } = require("../utils");
 
 const LEAD_HISTORY_COLLECTION = "email_templates";
-const LEAD_ASSET_ROOT = path.join(config.backendRoot, "storage", "lead-assets");
+const LEAD_ASSET_ROOT = (() => {
+  const explicitRoot = String(process.env.LEAD_ASSET_ROOT || "").trim();
+  if (explicitRoot) {
+    return explicitRoot;
+  }
+
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join("/tmp", "lead-assets");
+  }
+
+  return path.join(config.backendRoot, "storage", "lead-assets");
+})();
 const PITCH_DECK_CANDIDATES = [
   path.join(config.workspaceRoot, "docs", "CogitationWorks_PitchDeck (1).pdf"),
   path.join(
@@ -424,12 +435,13 @@ function renderClientLeadEmail({
 }) {
   const fromEmail = resolveSenderEmail(senderMode, customSenderEmail);
   const contactNumbers = ["+91 93608 89434", "8925210434"];
-  const contactNumbersInline = contactNumbers.join(", ");
+  const contactNumbersInline = contactNumbers.join(" / ");
+
   const senderModeLine =
     senderMode === "sales" || senderMode === "admin"
-      ? "We can continue this conversation directly from our managed Zoho outreach setup."
-      : `You can reply directly to this email at ${fromEmail}.`;
-  const websiteLine = `Explore our work at ${config.companyWebsite}.`;
+      ? `You can reach us through our managed outreach channel, or call us directly at ${contactNumbersInline}.`
+      : `Feel free to reply to this email or call us at ${contactNumbersInline}.`;
+
   const pitchDeckPath = getPitchDeckPath();
 
   const documentNames = [];
@@ -442,48 +454,47 @@ function renderClientLeadEmail({
     }
   }
   const uniqueDocumentNames = [...new Set(documentNames)];
-  const documentsLine = uniqueDocumentNames.length
-    ? `Documents prepared: ${uniqueDocumentNames.join(", ")}.`
-    : "Documents can be shared on request.";
 
   const technologyStyles = {
     "precision-outreach":
-      "For this opportunity, we can focus on: {technologies}.",
+      "For this engagement, our recommended service focus includes: {technologies}.",
     "market-research-angle":
-      "Based on our research, relevant capability areas include: {technologies}.",
+      "Based on our research into your segment, the most relevant capability areas are: {technologies}.",
     "product-led-pitch":
-      "A practical product scope could include: {technologies}.",
+      "A practical product scope for your business could cover: {technologies}.",
     "reputation-builder":
-      "To strengthen trust and visibility, we typically combine: {technologies}.",
-    "quick-intro": "Service focus for this discussion: {technologies}.",
+      "To strengthen your digital credibility end-to-end, we typically combine: {technologies}.",
+    "quick-intro":
+      "Proposed service areas for this discussion: {technologies}.",
   };
 
+  // ─── Template visual design ───────────────────────────────────────────────
   const templateDesigns = {
     "precision-outreach": {
-      badge: "Precision Brief",
-      headline: "Structured Digital Growth Plan",
+      badge: "Growth Strategy",
+      headline: "A Structured Digital Plan Built for Your Business",
       supporting:
-        "A clear, execution-ready approach for stronger web presence and measurable lead conversion.",
+        "Execution-ready website and app solutions designed to improve trust, attract quality leads, and convert them consistently.",
       accent: "#0d9488",
       accentSoft: "#ccfbf1",
       heroGradient: "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
       panel: "#f0fdfa",
     },
     "market-research-angle": {
-      badge: "Research Insight",
-      headline: "Opportunity Identified Through Market Signals",
+      badge: "Research-Led Outreach",
+      headline: "We Identified a Real Opportunity for Your Business",
       supporting:
-        "Positioned to convert discovery traffic into higher-quality enquiries with a stronger digital journey.",
+        "After reviewing your industry's digital landscape, we believe your brand is positioned to capture significantly more online traction.",
       accent: "#1d4ed8",
       accentSoft: "#dbeafe",
       heroGradient: "linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)",
       panel: "#eff6ff",
     },
     "product-led-pitch": {
-      badge: "Product Lens",
-      headline: "Website + App Experience Blueprint",
+      badge: "Product Strategy",
+      headline: "A Better Digital Experience Starts Here",
       supporting:
-        "A modern product-focused direction that improves clarity, response speed, and customer engagement.",
+        "Purpose-built websites and mobile apps that turn visitor attention into real enquiries — designed around your customers, not templates.",
       accent: "#7c3aed",
       accentSoft: "#ede9fe",
       heroGradient: "linear-gradient(135deg, #5b21b6 0%, #8b5cf6 100%)",
@@ -491,24 +502,63 @@ function renderClientLeadEmail({
     },
     "reputation-builder": {
       badge: "Brand Elevation",
-      headline: "Premium Presence, Greater Trust",
+      headline: "Your Business Deserves a Presence That Matches Its Reputation",
       supporting:
-        "A refined digital identity strategy designed to strengthen perception and improve long-term conversion quality.",
+        "A refined digital strategy built to strengthen credibility, sharpen perception, and attract higher-quality enquiries from day one.",
       accent: "#b45309",
       accentSoft: "#fef3c7",
       heroGradient: "linear-gradient(135deg, #92400e 0%, #f59e0b 100%)",
       panel: "#fffbeb",
     },
     "quick-intro": {
-      badge: "Executive Summary",
-      headline: "Fast Intro, Clear Next Step",
+      badge: "Direct Outreach",
+      headline: "A Quick, Honest Introduction from Cogitation Works",
       supporting:
-        "A concise proposal format for teams that prefer immediate clarity and practical action points.",
+        "We keep things brief because your time matters — here's who we are, what we do, and why we think it's worth a conversation.",
       accent: "#0f766e",
       accentSoft: "#d1fae5",
       heroGradient: "linear-gradient(135deg, #065f46 0%, #10b981 100%)",
       panel: "#ecfdf5",
     },
+  };
+
+  // ─── Per-template email paragraphs ────────────────────────────────────────
+  const templateParagraphs = {
+    "precision-outreach": [
+      `Hi ${client.name},`,
+      `We've been reviewing businesses across digital platforms and ${client.name} stood out as one with genuine growth potential — and a clear opportunity to convert more online interest into real customers.`,
+      `At ${config.companyName}, we build professional websites and mobile applications with a single focus: making your business easier to discover, easier to trust, and easier to choose.`,
+      `We'd love to put together a clear, execution-ready plan for your business — no generic proposals, just a focused approach built around what ${client.name} actually needs.`,
+      `Looking forward to connecting.`,
+    ],
+    "market-research-angle": [
+      `Hi ${client.name},`,
+      `While conducting research across industry directories, search platforms, and digital channels, ${client.name} stood out as a business with a strong foundation and clear room to grow its online reach.`,
+      `We specialise in building websites and mobile app experiences that help brands like yours attract better leads, hold visitor attention longer, and make a sharper first impression.`,
+      `We're not reaching out broadly — we reached out because we saw something specific worth discussing. We'd be glad to share a tailored concept at your convenience.`,
+      `Looking forward to hearing from you.`,
+    ],
+    "product-led-pitch": [
+      `Hi ${client.name},`,
+      `The difference between a visitor who leaves and a customer who converts often comes down to one thing: a digital experience that's clear, fast, and built for real intent. We believe ${client.name} is in a strong position to close that gap.`,
+      `${config.companyName} designs and builds production-ready websites and mobile applications — built not just to look good, but to perform at every customer touchpoint that matters.`,
+      `We'd love to walk you through a practical product concept tailored to ${client.name}. No guesswork, no jargon — just a clear direction you can act on.`,
+      `We look forward to connecting.`,
+    ],
+    "reputation-builder": [
+      `Hi ${client.name},`,
+      `We came across ${client.name} while reviewing businesses that have earned genuine market credibility — and we noticed your digital presence, while solid, may not yet be doing full justice to what you've built.`,
+      `We work with established brands to create premium websites and mobile experiences that elevate perception, reduce friction in the sales journey, and leave the right impression on every new visitor who finds you.`,
+      `This isn't about starting over. It's about ensuring your digital touchpoints are as strong as the business behind them. We'd love to share a tailored roadmap.`,
+      `Looking forward to the conversation.`,
+    ],
+    "quick-intro": [
+      `Hi ${client.name},`,
+      `We're ${config.companyName} — a digital product studio that builds professional websites and mobile apps for growing businesses. We came across ${client.name} and wanted to make a quick, direct introduction.`,
+      `We keep our outreach short because we'd rather demonstrate value than describe it. If there's an opportunity to sharpen your digital presence, we can show you what that looks like in a brief concept note.`,
+      `If you're open to it, we'd be happy to send something across — no commitment, no pressure.`,
+      `Warm regards.`,
+    ],
   };
 
   const technologyLine = technologies.length
@@ -518,44 +568,6 @@ function renderClientLeadEmail({
       )
     : "";
 
-  const templateParagraphs = {
-    "precision-outreach": [
-      `Hi ${client.name},`,
-      `We are reaching out from ${config.companyName} after reviewing businesses across multiple digital platforms and noticing the potential in ${client.name}.`,
-      "Our team builds professional websites and mobile apps that are designed to improve trust, lead capture, and day-to-day customer engagement.",
-      `If you are planning your next digital move, we would be happy to outline a clean solution tailored to your business. ${senderModeLine}`,
-      `${websiteLine} ${documentsLine}`,
-    ],
-    "market-research-angle": [
-      `Hi ${client.name},`,
-      `During a recent research exercise across industry directories, search listings, and social channels, ${client.name} stood out to us as a business that could benefit from a sharper digital presence.`,
-      "We help brands launch impressive websites and mobile app experiences that feel modern, credible, and built for real business growth.",
-      "We would be glad to share a focused concept for your brand with no fluff and no unnecessary complexity.",
-      `${websiteLine} ${documentsLine}`,
-    ],
-    "product-led-pitch": [
-      `Hi ${client.name},`,
-      `We believe ${client.name} has an opportunity to turn more interest into enquiries through a stronger website and a well-structured mobile app experience.`,
-      "At Cogitation Works, we design and build production-ready digital products that help businesses present services clearly and convert attention into action.",
-      `If useful, we can prepare a practical concept showing what this could look like for your business. ${senderModeLine}`,
-      `${websiteLine} ${documentsLine}`,
-    ],
-    "reputation-builder": [
-      `Hi ${client.name},`,
-      `We came across ${client.name} while reviewing businesses that already have strong market credibility and could become even more impressive online.`,
-      "Our work focuses on premium websites and mobile apps that elevate perception, improve responsiveness, and support long-term digital reputation.",
-      `If the timing is right, we would love to introduce a polished roadmap built specifically around your business goals. ${senderModeLine}`,
-      `${websiteLine} ${documentsLine}`,
-    ],
-    "quick-intro": [
-      `Hi ${client.name},`,
-      `This is a quick introduction from ${config.companyName}. We found ${client.name} while exploring businesses that would benefit from a better digital experience.`,
-      "We create professional websites and mobile apps that help brands look stronger and respond faster to new leads.",
-      `If you are open to it, we can share a short concept note and estimated approach. ${senderModeLine}`,
-      `${websiteLine} ${documentsLine}`,
-    ],
-  };
-
   const paragraphs = [...templateParagraphs[template.id]];
   if (technologyLine) {
     paragraphs.splice(3, 0, technologyLine);
@@ -563,14 +575,6 @@ function renderClientLeadEmail({
   if (emailDetailsParagraph) {
     paragraphs.splice(paragraphs.length - 1, 0, emailDetailsParagraph);
   }
-
-  const resourceItems = [
-    `<li style="margin-bottom: 6px;">Website: <a href="${escapeHtml(config.companyWebsite)}" target="_blank" rel="noreferrer">${escapeHtml(config.companyWebsite)}</a></li>`,
-    ...uniqueDocumentNames.map(
-      (filename) =>
-        `<li style="margin-bottom: 6px;">Document: ${escapeHtml(filename)}</li>`,
-    ),
-  ];
 
   const design = templateDesigns[template.id];
   const subjectLine = template.preview_subject.replace(
@@ -580,91 +584,110 @@ function renderClientLeadEmail({
   const greetingLine = paragraphs[0] || `Hi ${client.name},`;
   const narrativeLines = paragraphs.slice(1, -1);
   const closingLine = paragraphs[paragraphs.length - 1] || "";
-  const technologyChips = technologies.length
-    ? technologies
-        .map(
-          (item) =>
-            `<span style="display: inline-block; margin: 0 8px 8px 0; padding: 6px 10px; border-radius: 999px; background: ${design.accentSoft}; color: ${design.accent}; font-size: 12px; font-weight: 700;">${escapeHtml(item)}</span>`,
-        )
-        .join("")
-    : `<span style="color: #475569; font-size: 13px;">Capability focus will be tailored after your preferred scope is confirmed.</span>`;
-  const narrativeHtml = narrativeLines
+
+  const technologyChips = technologies
     .map(
-      (line) =>
-        `<p style="margin: 0 0 14px; color: #1e293b; font-size: 15px; line-height: 1.78;">${escapeHtml(line)}</p>`,
+      (item) =>
+        `<span style="display: inline-block; margin: 0 8px 8px 0; padding: 5px 14px; border-radius: 6px; background: ${design.accentSoft}; color: ${design.accent}; font-size: 12px; font-weight: 600; letter-spacing: 0.01em;">${escapeHtml(item)}</span>`,
     )
     .join("");
 
-  const htmlBody = `<div style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; color: #0f172a; background: #eef2f7; padding: 28px 16px;">
-  <div style="max-width: 740px; margin: 0 auto; background: #ffffff; border: 1px solid #dbe5f0; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);">
-    <div style="padding: 28px 28px 24px; background: ${design.heroGradient}; color: #ffffff;">
-      <p style="margin: 0 0 12px; display: inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.18); font-size: 11px; letter-spacing: 0.14em; font-weight: 700; text-transform: uppercase;">${escapeHtml(design.badge)}</p>
-      <h2 style="margin: 0; font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 800;">${escapeHtml(design.headline)}</h2>
-      <p style="margin: 12px 0 0; font-size: 15px; line-height: 1.7; opacity: 0.96;">${escapeHtml(design.supporting)}</p>
+  const narrativeHtml = narrativeLines
+    .map(
+      (line) =>
+        `<p style="margin: 0 0 16px; color: #374151; font-size: 15px; line-height: 1.8;">${escapeHtml(line)}</p>`,
+    )
+    .join("");
+
+  // ─── HTML email body ──────────────────────────────────────────────────────
+  const htmlBody = `<div style="font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 32px 16px; color: #0f172a;">
+  <div style="max-width: 660px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 32px rgba(15, 23, 42, 0.10);">
+
+    <!-- Header -->
+    <div style="background: ${design.heroGradient}; padding: 38px 36px 34px; color: #ffffff;">
+      <p style="margin: 0 0 14px; font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.78;">${escapeHtml(design.badge)}</p>
+      <h1 style="margin: 0 0 12px; font-size: 23px; font-weight: 800; line-height: 1.3; letter-spacing: -0.01em;">${escapeHtml(design.headline)}</h1>
+      <p style="margin: 0; font-size: 14px; line-height: 1.75; opacity: 0.92;">${escapeHtml(design.supporting)}</p>
     </div>
 
-    <div style="padding: 22px 28px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-      <div style="display: inline-block; margin-right: 10px; margin-bottom: 8px; padding: 8px 12px; border-radius: 999px; background: #ffffff; border: 1px solid #dbe5f0; color: #334155; font-size: 12px;"><strong style="color: #0f172a;">Subject:</strong> ${escapeHtml(subjectLine)}</div>
-      <div style="display: inline-block; margin-right: 10px; margin-bottom: 8px; padding: 8px 12px; border-radius: 999px; background: #ffffff; border: 1px solid #dbe5f0; color: #334155; font-size: 12px;"><strong style="color: #0f172a;">Welcome:</strong> ${escapeHtml(greetingLine)}</div>
-      <div style="display: inline-block; margin-right: 10px; margin-bottom: 8px; padding: 8px 12px; border-radius: 999px; background: #ffffff; border: 1px solid #dbe5f0; color: #334155; font-size: 12px;"><strong style="color: #0f172a;">Message:</strong> Professional outreach introduction</div>
-      <div style="display: inline-block; margin-bottom: 8px; padding: 8px 12px; border-radius: 999px; background: #ffffff; border: 1px solid #dbe5f0; color: #334155; font-size: 12px;"><strong style="color: #0f172a;">Contact us:</strong> ${escapeHtml(contactNumbersInline)}</div>
-    </div>
-
-    <div style="padding: 28px;">
-      <p style="margin: 0 0 16px; font-size: 18px; font-weight: 700; color: #0f172a;">${escapeHtml(greetingLine)}</p>
+    <!-- Body -->
+    <div style="padding: 36px 36px 4px;">
+      <p style="margin: 0 0 20px; font-size: 16px; font-weight: 600; color: #0f172a;">${escapeHtml(greetingLine)}</p>
       ${narrativeHtml}
-
-      <div style="margin-top: 18px; padding: 16px; border-radius: 14px; border: 1px solid ${design.accentSoft}; background: ${design.panel};">
-        <p style="margin: 0 0 10px; color: ${design.accent}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;">Capability focus</p>
-        <div>${technologyChips}</div>
-      </div>
-
-      <div style="margin-top: 18px; padding: 16px; border-radius: 14px; border: 1px solid #dbe5f0; background: #f8fafc;">
-        <p style="margin: 0 0 10px; color: #0f172a; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;">Website and documents</p>
-        <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.65;">
-          ${resourceItems.join("")}
-        </ul>
-      </div>
-
-      <div style="margin-top: 18px; padding: 16px; border-radius: 14px; border: 1px solid #dbe5f0; background: #ffffff;">
-        <p style="margin: 0 0 8px; color: #0f172a; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;">Next step</p>
-        <p style="margin: 0; color: #334155; font-size: 14px; line-height: 1.7;">${escapeHtml(senderModeLine)} Please contact us at ${escapeHtml(contactNumbersInline)}.</p>
-      </div>
-
-      <p style="margin: 20px 0 0; color: #334155; font-size: 14px; line-height: 1.7;">${escapeHtml(closingLine)}</p>
-
-      <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid #e2e8f0;">
-        <p style="margin: 0; color: #0f172a; font-size: 14px; line-height: 1.7;">Regards,<br /><strong>${escapeHtml(config.companyName)}</strong><br />Contact: ${escapeHtml(contactNumbersInline)}<br />Website: <a href="${escapeHtml(config.companyWebsite)}" target="_blank" rel="noreferrer" style="color: ${design.accent}; text-decoration: none;">${escapeHtml(config.companyWebsite)}</a></p>
-      </div>
     </div>
+
+    ${
+      technologies.length
+        ? `<!-- Service Focus -->
+    <div style="margin: 4px 36px 0; padding: 20px 22px; border-radius: 12px; background: ${design.panel}; border: 1px solid ${design.accentSoft};">
+      <p style="margin: 0 0 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: ${design.accent};">Service Focus</p>
+      <div style="line-height: 1;">${technologyChips}</div>
+    </div>`
+        : ""
+    }
+
+    <!-- Contact & Next Step -->
+    <div style="padding: 28px 36px 0;">
+      <hr style="margin: 0 0 24px; border: none; border-top: 1px solid #e2e8f0;" />
+      <div style="padding: 20px 24px; border-radius: 12px; background: ${design.panel}; border-left: 4px solid ${design.accent}; margin-bottom: 20px;">
+        <p style="margin: 0 0 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: ${design.accent};">Get in Touch</p>
+        <p style="margin: 0 0 10px; font-size: 14px; color: #374151; line-height: 1.75;">${escapeHtml(senderModeLine)}</p>
+        <p style="margin: 0; font-size: 14px; color: #374151;">Phone / WhatsApp: <strong style="color: #0f172a;">${escapeHtml(contactNumbersInline)}</strong></p>
+      </div>
+
+      ${
+        uniqueDocumentNames.length
+          ? `<!-- Attachments -->
+      <div style="padding: 18px 22px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin: 0 0 10px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: #64748b;">Attached for Your Reference</p>
+        <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px; line-height: 1.9;">
+          ${uniqueDocumentNames.map((filename) => `<li>${escapeHtml(filename)}</li>`).join("")}
+        </ul>
+      </div>`
+          : ""
+      }
+
+      <p style="margin: 0 0 32px; font-size: 14px; color: #64748b; line-height: 1.75;">${escapeHtml(closingLine)}</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="border-top: 1px solid #e2e8f0; padding: 20px 36px; background: #f8fafc;">
+      <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 2;">
+        <strong style="display: block; font-size: 14px; color: #0f172a; margin-bottom: 2px;">${escapeHtml(config.companyName)}</strong>
+        ${escapeHtml(contactNumbersInline)}&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="${escapeHtml(config.companyWebsite)}" target="_blank" rel="noreferrer" style="color: ${design.accent}; text-decoration: none;">${escapeHtml(config.companyWebsite)}</a>
+      </p>
+    </div>
+
   </div>
 </div>`;
+
+  // ─── Plain-text fallback ──────────────────────────────────────────────────
   const textBody = [
-    `${design.badge} - ${design.headline}`,
-    design.supporting,
-    "",
-    `Subject: ${subjectLine}`,
-    `Welcome: ${greetingLine}`,
-    "Message: Professional outreach introduction",
-    `Contact us: ${contactNumbersInline}`,
+    `${design.headline}`,
+    `${design.supporting}`,
     "",
     ...paragraphs,
     "",
-    "Capability Focus:",
-    technologies.length
-      ? `- ${technologies.join("\n- ")}`
-      : "- Custom scope based on your priorities.",
+    ...(technologies.length
+      ? ["Service Focus:", technologies.map((t) => `  - ${t}`).join("\n"), ""]
+      : []),
+    "Get in Touch:",
+    senderModeLine,
+    `Phone / WhatsApp: ${contactNumbersInline}`,
     "",
-    "Website and Documents:",
-    `- Website: ${config.companyWebsite}`,
-    ...uniqueDocumentNames.map((filename) => `- Document: ${filename}`),
-    "",
-    "Next Step:",
-    `- ${senderModeLine} Please contact us at ${contactNumbersInline}.`,
-    "Regards,",
-    `${config.companyName}\nContact: ${contactNumbersInline}\nWebsite: ${config.companyWebsite}`,
-  ].join("\n\n");
+    ...(uniqueDocumentNames.length
+      ? [
+          "Attached for Your Reference:",
+          uniqueDocumentNames.map((f) => `  - ${f}`).join("\n"),
+          "",
+        ]
+      : []),
+    "---",
+    `${config.companyName}`,
+    `${contactNumbersInline}  |  ${config.companyWebsite}`,
+  ].join("\n");
 
+  // ─── Attachments ──────────────────────────────────────────────────────────
   const attachments = [];
   if (pitchDeckPath) {
     attachments.push(
