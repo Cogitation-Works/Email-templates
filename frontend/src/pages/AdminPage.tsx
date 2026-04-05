@@ -394,13 +394,6 @@ export function AdminPage() {
           </button>
         }
         title="User Access Control"
-        topTabs={[
-          { label: "Overview", href: "#overview", active: true },
-          { label: "Composer", href: "#composer" },
-          { label: "Directory", href: "#directory" },
-          { label: "System Logs", href: "/logs" },
-          { label: "Settings", href: "/settings" },
-        ]}
       >
         <motion.section
           className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"

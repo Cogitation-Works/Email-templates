@@ -322,10 +322,6 @@ export function SettingsPage() {
         description="Update your profile details and security credentials."
         eyebrow="Account"
         title="Settings"
-        topTabs={[
-          { label: "Workspace", href: "/workspace" },
-          { label: "Settings", href: "/settings", active: true },
-        ]}
       >
         <section className="grid gap-6 xl:grid-cols-2">
           <div className="surface-panel rounded-2xl p-6">

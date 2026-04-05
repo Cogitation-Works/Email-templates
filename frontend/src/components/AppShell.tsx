@@ -161,7 +161,7 @@ export function AppShell({
 
   const defaultSidebarAction = (
     <button
-      className="mx-2 mb-8 inline-flex w-[calc(100%-1rem)] items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] px-4 py-3 text-sm font-black text-[#052113] shadow-lg shadow-[rgba(var(--accent-rgb),0.14)] transition hover:scale-[0.985]"
+      className="mx-2 mb-8 inline-flex w-[calc(100%-1rem)] items-center justify-center gap-2 rounded-xl bg-[linear-gradient(135deg,var(--accent),var(--accent-strong))] px-3 py-2.5 text-xs font-black text-[#052113] shadow-lg shadow-[rgba(var(--accent-rgb),0.14)] transition hover:scale-[0.985] lg:px-4 lg:py-3 lg:text-sm"
       onClick={() => navigate("/workspace")}
       type="button"
     >
@@ -429,12 +429,12 @@ export function AppShell({
             onClick={() => setMobileOpen(false)}
           >
             <motion.div
-              animate={{ width: "18rem" }}
-              className="shell-mobile-drawer h-full overflow-hidden bg-[var(--surface-sidebar)] p-5 shadow-2xl"
-              exit={{ width: 0 }}
-              initial={{ width: 0 }}
+              animate={{ x: 0 }}
+              className="shell-mobile-drawer h-full w-72 overflow-hidden bg-[var(--surface-sidebar)] p-5 shadow-2xl will-change-transform"
+              exit={{ x: "-100%" }}
+              initial={{ x: "-100%" }}
               onClick={(event) => event.stopPropagation()}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             >
               <div className="flex items-center justify-between">
                 <Brand compact />
@@ -476,7 +476,7 @@ export function AppShell({
               </div>
 
               <button
-                className="shell-mobile-logout mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-3 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--muted)]"
+                className="shell-mobile-logout mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-3 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--muted)] lg:px-4 lg:py-3"
                 onClick={() => void handleLogout()}
                 type="button"
               >

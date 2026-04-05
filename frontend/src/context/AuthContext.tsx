@@ -58,15 +58,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const SESSION_COOKIE_NAME =
-  import.meta.env.VITE_SESSION_COOKIE_NAME ?? "cw_session";
-
-function hasSessionCookie() {
-  return document.cookie
-    .split(";")
-    .map((entry) => entry.trim())
-    .some((entry) => entry.startsWith(`${SESSION_COOKIE_NAME}=`));
-}
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const location = useLocation();
@@ -90,14 +81,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    if (location.pathname === "/signin" && !hasSessionCookie()) {
-      setLoading(false);
-      setUser(null);
-      return;
-    }
-
     void refreshSession();
   }, [location.pathname]);
+
+  useEffect(() => {
+    // Check for existing session on app mount (important for "remember me" after browser restart)
+    void refreshSession();
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

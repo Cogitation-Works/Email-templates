@@ -115,12 +115,6 @@ export function LogsPage() {
       eyebrow="System Audit"
       searchPlaceholder="Search system logs..."
       title="Operational logs"
-      topTabs={[
-        { label: "Dashboard", href: "/workspace" },
-        { label: "Logs", href: "/logs", active: true },
-        { label: "Resources" },
-        { label: "Settings", href: "/settings" },
-      ]}
     >
       <section className="mb-10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 rounded-xl bg-[var(--surface-muted)] px-4 py-2.5">

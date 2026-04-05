@@ -1,8 +1,8 @@
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 
-const { config } = require('../config');
-const { getUserById, serializeUser } = require('../services/users');
-const { createHttpError } = require('../utils');
+const { config } = require("../config");
+const { getUserById, serializeUser } = require("../services/users");
+const { createHttpError } = require("../utils");
 
 function createAccessToken(user, rememberMe) {
   const maxAgeSeconds = rememberMe
@@ -27,12 +27,12 @@ function createAccessToken(user, rememberMe) {
 async function authenticateRequest(db, req) {
   let token = req.cookies?.[config.sessionCookieName];
 
-  if (!token && req.headers.authorization?.startsWith('Bearer ')) {
-    token = req.headers.authorization.slice('Bearer '.length).trim();
+  if (!token && req.headers.authorization?.startsWith("Bearer ")) {
+    token = req.headers.authorization.slice("Bearer ".length).trim();
   }
 
   if (!token) {
-    throw createHttpError(401, 'Authentication required.');
+    throw createHttpError(401, "Authentication required.");
   }
 
   let payload;
@@ -41,12 +41,12 @@ async function authenticateRequest(db, req) {
       algorithms: [config.jwtAlgorithm],
     });
   } catch (_error) {
-    throw createHttpError(401, 'Invalid session.');
+    throw createHttpError(401, "Invalid session.");
   }
 
   const user = await getUserById(db, payload.sub);
   if (!user) {
-    throw createHttpError(401, 'User not found.');
+    throw createHttpError(401, "User not found.");
   }
 
   return serializeUser(user);
@@ -55,18 +55,26 @@ async function authenticateRequest(db, req) {
 async function requireRole(db, req, roles) {
   const user = await authenticateRequest(db, req);
   if (!roles.includes(user.role)) {
-    throw createHttpError(403, 'You do not have permission to access this resource.');
+    throw createHttpError(
+      403,
+      "You do not have permission to access this resource.",
+    );
   }
   return user;
 }
 
 function issueSessionCookie(res, user, rememberMe) {
   const { token, maxAgeSeconds } = createAccessToken(user, rememberMe);
+  const maxAgeMs = maxAgeSeconds * 1000;
+  const expiresDate = new Date(Date.now() + maxAgeMs);
+
   res.cookie(config.sessionCookieName, token, {
     httpOnly: true,
     secure: config.secureCookies,
-    sameSite: 'lax',
-    maxAge: maxAgeSeconds * 1000,
+    sameSite: "lax",
+    path: "/",
+    maxAge: maxAgeMs,
+    expires: expiresDate,
   });
 }
 
@@ -74,7 +82,7 @@ function clearSessionCookie(res) {
   res.clearCookie(config.sessionCookieName, {
     httpOnly: true,
     secure: config.secureCookies,
-    sameSite: 'lax',
+    sameSite: "lax",
   });
 }
 

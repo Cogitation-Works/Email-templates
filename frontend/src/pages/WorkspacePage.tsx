@@ -654,12 +654,6 @@ export function WorkspacePage() {
           </button>
         }
         title="New Outreach Sequence"
-        topTabs={[
-          { label: "Workspace", href: "/workspace", active: true },
-          { label: "Pipeline" },
-          { label: "Network" },
-          { label: "Settings", href: "/settings" },
-        ]}
       >
         <section className="space-y-6">
           <motion.section

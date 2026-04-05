@@ -227,11 +227,6 @@ export function HistoryPage() {
         eyebrow="Outreach History"
         searchPlaceholder="Search history..."
         title="Sent history"
-        topTabs={[
-          { label: "Workspace", href: "/workspace" },
-          { label: "History", href: "/history", active: true },
-          { label: "Settings", href: "/settings" },
-        ]}
       >
         {error ? (
           <div className="mb-5 rounded-xl bg-[rgba(var(--danger-rgb),0.12)] px-4 py-3 text-sm leading-7 text-[var(--danger)]">
