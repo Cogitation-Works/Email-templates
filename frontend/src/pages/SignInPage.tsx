@@ -565,25 +565,10 @@ export function SignInPage() {
                   </header>
 
                   <form
-                    autoComplete="off"
+                    autoComplete="on"
                     className="mt-10 space-y-7"
                     onSubmit={loginFormSubmit}
                   >
-                    <div
-                      aria-hidden="true"
-                      className="pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0"
-                    >
-                      <input
-                        autoComplete="username"
-                        tabIndex={-1}
-                        type="text"
-                      />
-                      <input
-                        autoComplete="current-password"
-                        tabIndex={-1}
-                        type="password"
-                      />
-                    </div>
                     <div>
                       <div className="mb-2 flex items-center justify-between">
                         <label
@@ -599,7 +584,7 @@ export function SignInPage() {
                         className={fieldClass}
                         id="login-email"
                         inputMode="email"
-                        name="username"
+                        name="email"
                         onChange={(event) => setEmail(event.target.value)}
                         placeholder={
                           isLight
