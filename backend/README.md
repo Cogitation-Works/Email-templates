@@ -26,7 +26,7 @@ npm install
 vercel dev
 ```
 
-The API is available under `http://localhost:3000/api` with `vercel dev`.
+The API is available under `http://localhost:8001/api` when running the root launcher locally.
 
 To force-reset the seeded super admin row:
 
