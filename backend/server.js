@@ -107,6 +107,16 @@ function getDb() {
   return database;
 }
 
+function isPasswordChangeAllowedPath(pathname) {
+  return (
+    pathname === "/health" ||
+    pathname === `${config.apiPrefix}/auth/me` ||
+    pathname === `${config.apiPrefix}/auth/logout` ||
+    pathname === `${config.apiPrefix}/auth/change-password` ||
+    pathname.startsWith(`${config.apiPrefix}/auth/forgot-password/`)
+  );
+}
+
 app.use(async (req, res, next) => {
   try {
     await ready;
@@ -270,6 +280,42 @@ app.get(
     }
   }),
 );
+
+app.use(async (req, _res, next) => {
+  try {
+    if (!req.path.startsWith(config.apiPrefix)) {
+      next();
+      return;
+    }
+
+    if (isPasswordChangeAllowedPath(req.path)) {
+      next();
+      return;
+    }
+
+    let currentUser;
+    try {
+      currentUser = await authenticateRequest(getDb(), req);
+    } catch (_error) {
+      next();
+      return;
+    }
+
+    if (currentUser.must_change_password) {
+      next(
+        createHttpError(
+          403,
+          "Password update required before accessing this feature.",
+        ),
+      );
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get(
   `${config.apiPrefix}/admin/users`,

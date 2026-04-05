@@ -47,6 +47,7 @@ export function SettingsPage() {
   >(null);
   const [toast, setToast] = useState<ActionToastState | null>(null);
   const accountEmail = String(user?.email ?? "").trim();
+  const isForcedPasswordChange = Boolean(user?.must_change_password);
 
   const showToast = (kind: ActionToastState["kind"], message: string) => {
     setToast({ id: Date.now(), kind, message });
@@ -319,48 +320,56 @@ export function SettingsPage() {
     <>
       <ActionToast toast={toast} />
       <AppShell
-        description="Update your profile details and security credentials."
+        description={
+          isForcedPasswordChange
+            ? "First sign-in security check: update your password to continue."
+            : "Update your profile details and security credentials."
+        }
         eyebrow="Account"
         title="Settings"
       >
         <section className="grid gap-6 xl:grid-cols-2">
-          <div className="surface-panel rounded-2xl p-6">
-            <div className="mb-5 flex items-center gap-2">
-              <UserRound className="h-5 w-5 text-[var(--accent)]" />
-              <h2 className="text-xl font-black">Profile</h2>
+          {!isForcedPasswordChange ? (
+            <div className="surface-panel rounded-2xl p-6">
+              <div className="mb-5 flex items-center gap-2">
+                <UserRound className="h-5 w-5 text-[var(--accent)]" />
+                <h2 className="text-xl font-black">Profile</h2>
+              </div>
+              <div className="space-y-4">
+                <Field
+                  helper="Visible in audit logs and header details."
+                  label="Full name"
+                  onChange={(event) => setFullName(event.target.value)}
+                  placeholder="Enter full name"
+                  value={fullName}
+                />
+                <Field
+                  helper="Used in onboarding and communication context."
+                  label="Phone"
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="Enter phone number"
+                  value={phone}
+                />
+                <button
+                  className="rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-black text-white"
+                  disabled={busy === "profile"}
+                  onClick={() => void handleProfileUpdate()}
+                  type="button"
+                >
+                  {busy === "profile" ? "Saving..." : "Save profile"}
+                </button>
+              </div>
             </div>
-            <div className="space-y-4">
-              <Field
-                helper="Visible in audit logs and header details."
-                label="Full name"
-                onChange={(event) => setFullName(event.target.value)}
-                placeholder="Enter full name"
-                value={fullName}
-              />
-              <Field
-                helper="Used in onboarding and communication context."
-                label="Phone"
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="Enter phone number"
-                value={phone}
-              />
-              <button
-                className="rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-black text-white"
-                disabled={busy === "profile"}
-                onClick={() => void handleProfileUpdate()}
-                type="button"
-              >
-                {busy === "profile" ? "Saving..." : "Save profile"}
-              </button>
-            </div>
-          </div>
+          ) : null}
 
-          <div className="surface-panel rounded-2xl p-6">
+          <div
+            className={`surface-panel rounded-2xl p-6 ${isForcedPasswordChange ? "xl:col-span-2" : ""}`}
+          >
             <div className="mb-5 flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-[var(--secondary)]" />
               <h2 className="text-xl font-black">Change password with OTP</h2>
             </div>
-            {user?.must_change_password ? (
+            {isForcedPasswordChange ? (
               <p className="mb-4 rounded-xl bg-[rgba(var(--danger-rgb),0.12)] px-4 py-3 text-sm text-[var(--danger)]">
                 You must change your password before continuing.
               </p>
@@ -519,138 +528,142 @@ export function SettingsPage() {
             </div>
           </div>
 
-          <div className="surface-panel rounded-2xl p-6 xl:col-span-2">
-            <div className="mb-5 flex items-center gap-2">
-              <Mail className="h-5 w-5 text-[var(--accent)]" />
-              <h2 className="text-xl font-black">Change email with OTP</h2>
+          {!isForcedPasswordChange ? (
+            <div className="surface-panel rounded-2xl p-6 xl:col-span-2">
+              <div className="mb-5 flex items-center gap-2">
+                <Mail className="h-5 w-5 text-[var(--accent)]" />
+                <h2 className="text-xl font-black">Change email with OTP</h2>
+              </div>
+              <div className="space-y-4">
+                <p className="rounded-xl bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
+                  {emailChangeStep === "new-email"
+                    ? "Step 1 of 4: Enter your new email and send OTPs."
+                    : emailChangeStep === "current-otp"
+                      ? "Step 2 of 4: Verify OTP sent to your current email."
+                      : emailChangeStep === "new-otp"
+                        ? "Step 3 of 4: Verify OTP sent to your new email."
+                        : "Step 4 of 4: Confirm email change."}
+                </p>
+
+                {emailChangeStep === "new-email" ? (
+                  <>
+                    <Field
+                      disabled
+                      helper="Your current account email."
+                      label="Current email"
+                      type="email"
+                      value={accountEmail}
+                    />
+                    <Field
+                      helper="We will send OTP to this new address for verification."
+                      label="New email"
+                      onChange={(event) => setNewEmail(event.target.value)}
+                      placeholder="Enter new email"
+                      type="email"
+                      value={newEmail}
+                    />
+                    <button
+                      className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
+                      disabled={busy === "email-change-start"}
+                      onClick={() => void handleStartEmailChange()}
+                      type="button"
+                    >
+                      {busy === "email-change-start"
+                        ? "Sending OTPs..."
+                        : "Send OTPs"}
+                    </button>
+                  </>
+                ) : null}
+
+                {emailChangeStep === "current-otp" ? (
+                  <>
+                    <Field
+                      disabled
+                      helper="OTP destination"
+                      label="Current email"
+                      type="email"
+                      value={maskedCurrentEmail}
+                    />
+                    <Field
+                      label="Current email OTP"
+                      onChange={(event) =>
+                        setCurrentEmailOtp(event.target.value)
+                      }
+                      placeholder="Enter OTP"
+                      value={currentEmailOtp}
+                    />
+                    <button
+                      className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
+                      disabled={busy === "email-change-current-verify"}
+                      onClick={() => void handleVerifyCurrentEmailOtp()}
+                      type="button"
+                    >
+                      {busy === "email-change-current-verify"
+                        ? "Verifying..."
+                        : "Verify current email OTP"}
+                    </button>
+                  </>
+                ) : null}
+
+                {emailChangeStep === "new-otp" ? (
+                  <>
+                    <Field
+                      disabled
+                      helper="OTP destination"
+                      label="New email"
+                      type="email"
+                      value={maskedNewEmail}
+                    />
+                    <Field
+                      label="New email OTP"
+                      onChange={(event) => setNewEmailOtp(event.target.value)}
+                      placeholder="Enter OTP"
+                      value={newEmailOtp}
+                    />
+                    <button
+                      className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
+                      disabled={busy === "email-change-new-verify"}
+                      onClick={() => void handleVerifyNewEmailOtp()}
+                      type="button"
+                    >
+                      {busy === "email-change-new-verify"
+                        ? "Verifying..."
+                        : "Verify new email OTP"}
+                    </button>
+                  </>
+                ) : null}
+
+                {emailChangeStep === "confirm" ? (
+                  <>
+                    <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--text)]">
+                      OTP verification complete for both email addresses.
+                      Confirm to update your account email.
+                    </p>
+                    <button
+                      className="w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-black text-white"
+                      disabled={busy === "email-change-confirm"}
+                      onClick={() => void handleConfirmEmailChange()}
+                      type="button"
+                    >
+                      {busy === "email-change-confirm"
+                        ? "Updating email..."
+                        : "Confirm email change"}
+                    </button>
+                  </>
+                ) : null}
+
+                {emailChangeStep !== "new-email" ? (
+                  <button
+                    className="text-sm font-semibold text-[var(--soft)] underline underline-offset-4"
+                    onClick={resetEmailChangeFlow}
+                    type="button"
+                  >
+                    Start over
+                  </button>
+                ) : null}
+              </div>
             </div>
-            <div className="space-y-4">
-              <p className="rounded-xl bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
-                {emailChangeStep === "new-email"
-                  ? "Step 1 of 4: Enter your new email and send OTPs."
-                  : emailChangeStep === "current-otp"
-                    ? "Step 2 of 4: Verify OTP sent to your current email."
-                    : emailChangeStep === "new-otp"
-                      ? "Step 3 of 4: Verify OTP sent to your new email."
-                      : "Step 4 of 4: Confirm email change."}
-              </p>
-
-              {emailChangeStep === "new-email" ? (
-                <>
-                  <Field
-                    disabled
-                    helper="Your current account email."
-                    label="Current email"
-                    type="email"
-                    value={accountEmail}
-                  />
-                  <Field
-                    helper="We will send OTP to this new address for verification."
-                    label="New email"
-                    onChange={(event) => setNewEmail(event.target.value)}
-                    placeholder="Enter new email"
-                    type="email"
-                    value={newEmail}
-                  />
-                  <button
-                    className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
-                    disabled={busy === "email-change-start"}
-                    onClick={() => void handleStartEmailChange()}
-                    type="button"
-                  >
-                    {busy === "email-change-start"
-                      ? "Sending OTPs..."
-                      : "Send OTPs"}
-                  </button>
-                </>
-              ) : null}
-
-              {emailChangeStep === "current-otp" ? (
-                <>
-                  <Field
-                    disabled
-                    helper="OTP destination"
-                    label="Current email"
-                    type="email"
-                    value={maskedCurrentEmail}
-                  />
-                  <Field
-                    label="Current email OTP"
-                    onChange={(event) => setCurrentEmailOtp(event.target.value)}
-                    placeholder="Enter OTP"
-                    value={currentEmailOtp}
-                  />
-                  <button
-                    className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
-                    disabled={busy === "email-change-current-verify"}
-                    onClick={() => void handleVerifyCurrentEmailOtp()}
-                    type="button"
-                  >
-                    {busy === "email-change-current-verify"
-                      ? "Verifying..."
-                      : "Verify current email OTP"}
-                  </button>
-                </>
-              ) : null}
-
-              {emailChangeStep === "new-otp" ? (
-                <>
-                  <Field
-                    disabled
-                    helper="OTP destination"
-                    label="New email"
-                    type="email"
-                    value={maskedNewEmail}
-                  />
-                  <Field
-                    label="New email OTP"
-                    onChange={(event) => setNewEmailOtp(event.target.value)}
-                    placeholder="Enter OTP"
-                    value={newEmailOtp}
-                  />
-                  <button
-                    className="w-full rounded-xl bg-[var(--secondary)] px-5 py-3 text-sm font-black text-[#1f1a10]"
-                    disabled={busy === "email-change-new-verify"}
-                    onClick={() => void handleVerifyNewEmailOtp()}
-                    type="button"
-                  >
-                    {busy === "email-change-new-verify"
-                      ? "Verifying..."
-                      : "Verify new email OTP"}
-                  </button>
-                </>
-              ) : null}
-
-              {emailChangeStep === "confirm" ? (
-                <>
-                  <p className="rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-3 text-sm text-[var(--text)]">
-                    OTP verification complete for both email addresses. Confirm
-                    to update your account email.
-                  </p>
-                  <button
-                    className="w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-black text-white"
-                    disabled={busy === "email-change-confirm"}
-                    onClick={() => void handleConfirmEmailChange()}
-                    type="button"
-                  >
-                    {busy === "email-change-confirm"
-                      ? "Updating email..."
-                      : "Confirm email change"}
-                  </button>
-                </>
-              ) : null}
-
-              {emailChangeStep !== "new-email" ? (
-                <button
-                  className="text-sm font-semibold text-[var(--soft)] underline underline-offset-4"
-                  onClick={resetEmailChangeFlow}
-                  type="button"
-                >
-                  Start over
-                </button>
-              ) : null}
-            </div>
-          </div>
+          ) : null}
         </section>
       </AppShell>
     </>

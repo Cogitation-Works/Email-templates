@@ -251,7 +251,7 @@ function buildPasswordResetEmail({ fullName, email, password }) {
   });
 }
 
-async function deliverEmail(preview) {
+async function deliverEmail(preview, options = {}) {
   if (config.emailDeliveryMode === "log") {
     return {
       delivered: true,
@@ -260,8 +260,25 @@ async function deliverEmail(preview) {
     };
   }
 
+  const gmailCredentials = options.gmailCredentials || null;
+  const senderMode = String(options.senderMode || "").trim();
+
   const account =
-    getSmtpAccount(preview.from_email) || getSmtpAccount(defaultSenderEmail());
+    senderMode === "gmail" &&
+    gmailCredentials?.email &&
+    gmailCredentials?.appPassword
+      ? {
+          key: "gmail-direct",
+          host: "smtp.gmail.com",
+          port: 587,
+          username: gmailCredentials.email,
+          password: gmailCredentials.appPassword,
+          senderEmail: gmailCredentials.email,
+          senderName: preview.from_name || config.companyName,
+          starttls: true,
+        }
+      : getSmtpAccount(preview.from_email) ||
+        getSmtpAccount(defaultSenderEmail());
   if (!account) {
     return {
       delivered: false,

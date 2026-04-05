@@ -153,6 +153,10 @@ const config = {
     process.env.ZOHO_SENDER_EMAIL,
     normalizeString(process.env.SMTP_SECONDARY_SENDER_EMAIL),
   ),
+  adminSenderEmail: normalizeString(
+    process.env.ADMIN_SENDER_EMAIL,
+    normalizeString(process.env.SMTP_TERTIARY_SENDER_EMAIL),
+  ),
   systemSenderEmail: normalizeString(
     process.env.SYSTEM_SENDER_EMAIL,
     normalizeString(process.env.SMTP_TERTIARY_SENDER_EMAIL),
@@ -265,7 +269,7 @@ function resolveSalesSenderEmail() {
 }
 
 function resolveAdminSenderEmail() {
-  return resolveSystemSenderEmail();
+  return config.adminSenderEmail || resolveSystemSenderEmail();
 }
 
 module.exports = {

@@ -155,6 +155,14 @@ function validateSenderAccess(actor, senderMode, customSenderEmail) {
     if (!isValidEmail(customSenderEmail)) {
       throw createHttpError(422, "Enter a valid Gmail address.");
     }
+    if (
+      !String(customSenderEmail).trim().toLowerCase().endsWith("@gmail.com")
+    ) {
+      throw createHttpError(
+        422,
+        "Gmail Direct supports only normal Gmail addresses ending with @gmail.com.",
+      );
+    }
     return;
   }
 
@@ -209,6 +217,9 @@ function validateLeadPayload(
 ) {
   const senderMode = String(payload.sender_mode || "").trim();
   const customSenderEmail = normalizeOptionalText(payload.custom_sender_email);
+  const customSenderAppPassword = normalizeOptionalText(
+    payload.custom_sender_app_password,
+  );
   const contentType = String(payload.content_type || "").trim();
   const deliveryMode = String(payload.delivery_mode || "").trim();
   const selectedTemplateId = normalizeOptionalText(
@@ -278,6 +289,7 @@ function validateLeadPayload(
   return {
     sender_mode: senderMode,
     custom_sender_email: customSenderEmail,
+    custom_sender_app_password: customSenderAppPassword,
     content_type: contentType,
     delivery_mode: deliveryMode,
     selected_template_id: selectedTemplateId,
@@ -775,6 +787,20 @@ async function sendClientLeadCampaign(
     validated.sender_mode,
     validated.custom_sender_email,
   );
+  if (validated.sender_mode === "gmail") {
+    if (!validated.custom_sender_app_password) {
+      throw createHttpError(
+        422,
+        "Enter the Gmail app password to send using Gmail Direct.",
+      );
+    }
+    if (validated.scheduled_for) {
+      throw createHttpError(
+        422,
+        "Scheduled sends are not supported for Gmail Direct. Use Send now.",
+      );
+    }
+  }
   const template = getTemplateById(validated.selected_template_id);
 
   const recordId = new ObjectId();
@@ -817,7 +843,16 @@ async function sendClientLeadCampaign(
     }
   } else {
     for (const preview of previews) {
-      const delivery = await deliverEmail(preview);
+      const delivery = await deliverEmail(preview, {
+        senderMode: validated.sender_mode,
+        gmailCredentials:
+          validated.sender_mode === "gmail"
+            ? {
+                email: validated.custom_sender_email,
+                appPassword: validated.custom_sender_app_password,
+              }
+            : null,
+      });
       deliveryResults.push({
         recipient_name: preview.recipient_name,
         recipient_email: preview.recipient_email,
@@ -985,6 +1020,13 @@ async function resendClientLeadCampaign(db, recordId, actor) {
     }
   }
 
+  if (document.sender_mode === "gmail") {
+    throw createHttpError(
+      409,
+      "Resend is not available for Gmail Direct because app passwords are never stored. Create a new send from Workspace.",
+    );
+  }
+
   const deliveryResults = [];
   for (const preview of document.emails || []) {
     const delivery = await deliverEmail(preview);
@@ -1042,6 +1084,44 @@ async function resendClientLeadCampaign(db, recordId, actor) {
 }
 
 async function dispatchScheduledCampaignDocument(db, document) {
+  if (document.sender_mode === "gmail") {
+    const errorMessage =
+      "Scheduled dispatch is not supported for Gmail Direct. Use Sales/Admin sender for scheduled campaigns.";
+    const deliveryResults = (document.emails || []).map((preview) => ({
+      recipient_name: preview.recipient_name,
+      recipient_email: preview.recipient_email,
+      subject: preview.subject,
+      delivered: false,
+      message: errorMessage,
+    }));
+
+    const now = new Date();
+    await db.collection(LEAD_HISTORY_COLLECTION).updateOne(
+      { _id: document._id },
+      {
+        $set: {
+          delivery_results: deliveryResults,
+          last_sent_at: now,
+          dispatch_status: "failed",
+          scheduled_dispatched_at: now,
+          scheduled_error: errorMessage,
+        },
+      },
+    );
+
+    return {
+      processed: 1,
+      delivered: 0,
+      failed: 1,
+      errors: [
+        {
+          id: serializeId(document._id),
+          error: errorMessage,
+        },
+      ],
+    };
+  }
+
   const deliveryResults = [];
   for (const preview of document.emails || []) {
     const delivery = await deliverEmail(preview);

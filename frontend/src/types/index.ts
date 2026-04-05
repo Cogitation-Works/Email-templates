@@ -206,6 +206,7 @@ export interface UpdateUserPayload extends CreateUserPayload {
 export interface LeadPreviewPayload {
   sender_mode: LeadSenderMode;
   custom_sender_email?: string;
+  custom_sender_app_password?: string;
   content_type: "client_lead";
   delivery_mode: "single" | "multiple";
   selected_template_id?: string;

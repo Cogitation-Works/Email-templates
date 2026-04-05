@@ -118,6 +118,7 @@ export function WorkspacePage() {
   const [templates, setTemplates] = useState<TemplateVariant[]>([]);
   const [senderMode, setSenderMode] = useState<LeadSenderMode>("gmail");
   const [gmailAddress, setGmailAddress] = useState("");
+  const [gmailAppPassword, setGmailAppPassword] = useState("");
   const [deliveryMode, setDeliveryMode] = useState<"single" | "multiple">(
     "single",
   );
@@ -283,9 +284,9 @@ export function WorkspacePage() {
     {
       id: "gmail" as const,
       title: "Gmail Direct",
-      subtitle: "Personal workspace",
+      subtitle: "Normal Gmail + app password",
       description:
-        "Default sender path for every user. Enter the Gmail address to use for delivery.",
+        "For normal Gmail (@gmail.com), provide Gmail address and app password for delivery.",
       enabled: true,
       icon: Mail,
       tone: "accent",
@@ -352,6 +353,10 @@ export function WorkspacePage() {
       sender_mode: senderMode,
       custom_sender_email:
         senderMode === "gmail" ? gmailAddress.trim() : undefined,
+      custom_sender_app_password:
+        senderMode === "gmail"
+          ? gmailAppPassword.replace(/\s+/g, "").trim()
+          : undefined,
       content_type: "client_lead" as const,
       delivery_mode: deliveryMode,
       selected_template_id: selectedTemplateId || undefined,
@@ -372,6 +377,7 @@ export function WorkspacePage() {
     [
       senderMode,
       gmailAddress,
+      gmailAppPassword,
       deliveryMode,
       selectedTemplateId,
       selectedTechnologies,
@@ -394,6 +400,20 @@ export function WorkspacePage() {
   const validateBeforeSubmit = () => {
     if (senderMode === "gmail" && !gmailAddress.trim()) {
       throw new Error("Enter the Gmail address you want to send from.");
+    }
+    if (
+      senderMode === "gmail" &&
+      !gmailAddress.trim().toLowerCase().endsWith("@gmail.com")
+    ) {
+      throw new Error(
+        "Gmail Direct supports only normal Gmail addresses ending with @gmail.com.",
+      );
+    }
+    if (
+      senderMode === "gmail" &&
+      !gmailAppPassword.replace(/\s+/g, "").trim()
+    ) {
+      throw new Error("Enter the Gmail app password.");
     }
 
     if (
@@ -448,6 +468,7 @@ export function WorkspacePage() {
       );
       setSenderMode("gmail");
       setGmailAddress("");
+      setGmailAppPassword("");
       setDeliveryMode("single");
       setClients([blankClient()]);
       setSelectedTechnologies([]);
@@ -474,6 +495,7 @@ export function WorkspacePage() {
   const resetSequence = () => {
     setSenderMode("gmail");
     setGmailAddress("");
+    setGmailAppPassword("");
     setDeliveryMode("single");
     setClients([blankClient()]);
     setSelectedTechnologies([]);
@@ -723,13 +745,48 @@ export function WorkspacePage() {
             {senderMode === "gmail" ? (
               <div className="mt-5">
                 <Field
-                  helper="Use the authenticated Gmail account that should appear as the sender."
+                  helper="Use a normal Gmail address (@gmail.com)."
                   label="Which Gmail should be used?"
                   onChange={(event) => setGmailAddress(event.target.value)}
                   placeholder="sender@gmail.com"
                   type="email"
                   value={gmailAddress}
                 />
+                <div className="mt-4">
+                  <Field
+                    helper="Enter Gmail App Password (16-character). This is required for normal Gmail SMTP sends."
+                    label="Gmail App Password"
+                    onChange={(event) =>
+                      setGmailAppPassword(event.target.value)
+                    }
+                    placeholder="abcd efgh ijkl mnop"
+                    type="password"
+                    value={gmailAppPassword}
+                  />
+                </div>
+                <details className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--muted)]">
+                  <summary className="cursor-pointer font-semibold text-[var(--text)]">
+                    How to generate Gmail App Password
+                  </summary>
+                  <ol className="mt-3 list-decimal space-y-1 pl-5 leading-7">
+                    <li>Sign in to your Gmail account.</li>
+                    <li>
+                      Turn on 2-Step Verification in Google Account security.
+                    </li>
+                    <li>
+                      Open App Passwords:
+                      https://myaccount.google.com/apppasswords
+                    </li>
+                    <li>
+                      Create a new app password (Mail), then copy the
+                      16-character password.
+                    </li>
+                    <li>Paste it here. Spaces are optional.</li>
+                  </ol>
+                  <p className="mt-2 text-xs text-[var(--soft)]">
+                    This option is only for normal Gmail addresses (@gmail.com).
+                  </p>
+                </details>
               </div>
             ) : null}
           </motion.section>
