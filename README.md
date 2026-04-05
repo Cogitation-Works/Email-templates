@@ -1,11 +1,11 @@
 # Cogitation Works Email Platform
 
-This repo contains the internal outreach platform for Cogitation Works:
+This repo contains a single Vercel deployment setup with:
 
-- React frontend rebuilt as a production-style internal workspace
-- Express backend (`server.js`) with cookie auth, OTP verification, user management, audit logs, and email history
-- MongoDB-backed storage for users, campaigns, logs, and templates
-- Sender routing across Gmail SMTP, Sales Zoho, and Admin Zoho
+- Vite frontend in `frontend`
+- Serverless API under `/api/*` (backed by shared backend services)
+- MongoDB-backed storage for users, campaigns, logs, templates, and scheduled emails
+- SMTP delivery with scheduler processing via GitHub Actions cron
 
 ## Project structure
 
@@ -23,7 +23,50 @@ This repo contains the internal outreach platform for Cogitation Works:
 1. Copy [`backend/.env.example`](/c:/Users/cogit/Desktop/Cogitation%20Works%20Email%20Template/backend/.env.example) to `backend/.env`.
 2. Fill the backend env with your real super admin, SMTP, and MongoDB values.
 3. Install backend dependencies inside `backend` with `npm install`.
-4. Start the API with `npm run dev` or `node server.js`.
+4. Use `vercel dev` from repository root for local full-stack behavior.
+
+## Single Vercel deployment
+
+This repo uses a root `vercel.json` to deploy both layers in one project:
+
+- Frontend build source: `frontend/package.json` (Vite static build)
+- API runtime: root `api/**/*.js` (serverless functions)
+- API base path: `/api/*`
+
+## Scheduled email processing
+
+### API endpoints
+
+- `POST /api/scheduler/schedule`
+  - Stores scheduled email payload in MongoDB with status `pending`.
+  - Required body fields: `email`, `subject`, `message`, `sendAt`.
+- `POST /api/scheduler/process`
+  - Requires secret auth (`x-scheduler-secret` header or `?secret=` query).
+  - Processes due records where `sendAt <= now` and `status = pending`.
+  - Sends via SMTP and updates status to `sent` on success.
+
+### GitHub Actions cron
+
+- Workflow: `.github/workflows/scheduled-email-dispatch.yml`
+- Runs every 5 minutes and calls `/api/scheduler/process`.
+
+## Required environment variables
+
+Set these in Vercel (Project Environment Variables):
+
+- `MONGODB_URI`
+- `MONGODB_DB_NAME`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_SENDER_EMAIL`
+- `SCHEDULER_SECRET`
+
+Set these in GitHub Actions Secrets:
+
+- `SCHEDULER_URL` (example: `https://your-project.vercel.app`)
+- `SCHEDULER_SECRET` (must match Vercel value)
 
 ## Product notes
 
@@ -36,28 +79,10 @@ This repo contains the internal outreach platform for Cogitation Works:
 - Super admin can resend any campaign. Standard users can resend only from `self` history.
 - Client lead emails include the company website and the pitch deck attachment.
 
-## Frontend deployment
+## Deployment note
 
-The frontend is a Vite SPA and is safe to deploy as a static app.
-
-### Vercel
-
-1. Import the project and set the root directory to `frontend`.
-2. Build command: `npm run build`
-3. Output directory: `dist`
-4. Set `VITE_API_URL` to your deployed backend API URL.
-5. `frontend/vercel.json` already includes the SPA rewrite for direct route access.
-
-### AWS S3 / CloudFront
-
-1. Build the frontend with `npm run build`.
-2. Upload the contents of `frontend/dist`.
-3. Configure SPA fallback so unknown routes return `/index.html`.
-4. Set `VITE_API_URL` before building.
-
-### Other static hosts
-
-- Any host that serves the `dist` folder and supports SPA fallback to `index.html` will work.
+- Frontend defaults to same-origin API calls (`/api`).
+- Set `VITE_API_URL` only if you intentionally host frontend and API on different domains.
 
 ## Verified
 

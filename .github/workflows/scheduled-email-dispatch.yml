@@ -1,0 +1,29 @@
+name: Scheduled Email Dispatch
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduler endpoint
+        env:
+          SCHEDULER_URL: ${{ secrets.SCHEDULER_URL }}
+          SCHEDULER_SECRET: ${{ secrets.SCHEDULER_SECRET }}
+        run: |
+          if [ -z "$SCHEDULER_URL" ]; then
+            echo "SCHEDULER_URL secret is missing"
+            exit 1
+          fi
+          if [ -z "$SCHEDULER_SECRET" ]; then
+            echo "SCHEDULER_SECRET secret is missing"
+            exit 1
+          fi
+
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "x-scheduler-secret: $SCHEDULER_SECRET" \
+            "$SCHEDULER_URL/api/scheduler/process"

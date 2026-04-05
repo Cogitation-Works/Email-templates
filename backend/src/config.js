@@ -100,15 +100,9 @@ const config = {
   nodeEnv: normalizeString(process.env.NODE_ENV, "development"),
   apiPrefix: normalizeString(process.env.API_PREFIX, "/api"),
   frontendOrigins,
-  mongodbUri: normalizeString(
-    process.env.MONGODB_URI,
-    "mongodb://localhost:27017",
-  ),
+  mongodbUri: normalizeString(process.env.MONGODB_URI),
   mongodbStandardUri: normalizeString(process.env.MONGODB_STANDARD_URI),
-  mongodbDbName: normalizeString(
-    process.env.MONGODB_DB_NAME,
-    "cogitationworks",
-  ),
+  mongodbDbName: normalizeString(process.env.MONGODB_DB_NAME),
   mongodbServerSelectionTimeoutMs: toNumber(
     process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS,
     15000,
@@ -121,10 +115,7 @@ const config = {
     process.env.MONGODB_TLS_ALLOW_INVALID_HOSTNAMES,
     false,
   ),
-  jwtSecretKey: normalizeString(
-    process.env.JWT_SECRET_KEY,
-    "change-this-secret-before-production",
-  ),
+  jwtSecretKey: normalizeString(process.env.JWT_SECRET_KEY),
   jwtAlgorithm: normalizeString(process.env.JWT_ALGORITHM, "HS256"),
   accessTokenExpireMinutes: toNumber(
     process.env.ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -140,20 +131,12 @@ const config = {
   emailDeliveryMode: normalizeString(process.env.EMAIL_DELIVERY_MODE, "log"),
   smtpAccounts,
   companyName: normalizeString(process.env.COMPANY_NAME, "Cogitation Works"),
-  companyPhone: normalizeString(process.env.COMPANY_PHONE, "8778905646"),
-  companyWebsite: normalizeString(
-    process.env.COMPANY_WEBSITE,
-    "https://cogitationworks.com/",
-  ),
-  superAdminName: normalizeString(process.env.SUPER_ADMIN_NAME, "superadmin"),
-  superAdminEmail: normalizeString(
-    process.env.SUPER_ADMIN_EMAIL,
-    "info@cogitationworks.com",
-  ),
-  superAdminPassword: normalizeString(
-    process.env.SUPER_ADMIN_PASSWORD,
-    "CW@dec032025",
-  ),
+  companyPhone: normalizeString(process.env.COMPANY_PHONE),
+  companyWebsite: normalizeString(process.env.COMPANY_WEBSITE),
+  superAdminName: normalizeString(process.env.SUPER_ADMIN_NAME),
+  superAdminEmail: normalizeString(process.env.SUPER_ADMIN_EMAIL),
+  superAdminPassword: normalizeString(process.env.SUPER_ADMIN_PASSWORD),
+  schedulerSecret: normalizeString(process.env.SCHEDULER_SECRET),
   zohoSenderEmail: normalizeString(
     process.env.ZOHO_SENDER_EMAIL,
     normalizeString(process.env.SMTP_SECONDARY_SENDER_EMAIL),
@@ -177,23 +160,32 @@ function validateCriticalEnvironment() {
   if (!normalizeString(process.env.MONGODB_URI)) {
     errors.push("MONGODB_URI is required.");
   }
+  if (!normalizeString(process.env.MONGODB_DB_NAME)) {
+    errors.push("MONGODB_DB_NAME is required.");
+  }
 
   if (!normalizeString(process.env.JWT_SECRET_KEY)) {
     errors.push("JWT_SECRET_KEY is required.");
   }
 
-  if (config.jwtSecretKey === "change-this-secret-before-production") {
-    warnings.push("JWT_SECRET_KEY is using the default fallback value.");
+  if (!normalizeString(process.env.SUPER_ADMIN_NAME)) {
+    errors.push("SUPER_ADMIN_NAME is required.");
   }
-
-  if (config.superAdminPassword === "CW@dec032025") {
-    warnings.push("SUPER_ADMIN_PASSWORD is using the default fallback value.");
+  if (!normalizeString(process.env.SUPER_ADMIN_EMAIL)) {
+    errors.push("SUPER_ADMIN_EMAIL is required.");
+  }
+  if (!normalizeString(process.env.SUPER_ADMIN_PASSWORD)) {
+    errors.push("SUPER_ADMIN_PASSWORD is required.");
   }
 
   if (config.emailDeliveryMode === "smtp" && !config.smtpAccounts.length) {
     errors.push(
       "EMAIL_DELIVERY_MODE=smtp requires at least one valid SMTP account.",
     );
+  }
+
+  if (!config.schedulerSecret) {
+    warnings.push("SCHEDULER_SECRET is not configured.");
   }
 
   const isProduction = config.nodeEnv === "production";

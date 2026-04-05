@@ -43,6 +43,11 @@ const {
   recoverDeletedClientLeadCampaign,
 } = require("./src/services/leads");
 const {
+  createScheduledEmail,
+  ensureScheduledEmailIndexes,
+  processDueScheduledEmails,
+} = require("./src/services/scheduledEmails");
+const {
   confirmEmailChange,
   ensureAuthIndexes,
   resetPasswordWithChallenge,
@@ -74,12 +79,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 let database = null;
-let schedulerHandle = null;
 const ready = (async () => {
   database = await connectDatabase();
   await ensureUserIndexes(database);
   await ensureAuthIndexes(database);
   await ensureLeadIndexes(database);
+  await ensureScheduledEmailIndexes(database);
   await ensureSuperAdmin(database);
 })();
 
@@ -449,6 +454,61 @@ app.post(
   }),
 );
 
+app.post(
+  `${config.apiPrefix}/scheduler/schedule`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+    const result = await createScheduledEmail(
+      getDb(),
+      req.body || {},
+      currentUser,
+    );
+    res.status(201).json({
+      message: `Email scheduled for ${new Date(result.sendAt).toLocaleString()}.`,
+      item: result,
+    });
+  }),
+);
+
+app.post(
+  `${config.apiPrefix}/scheduler/process`,
+  asyncHandler(async (req, res) => {
+    const suppliedSecret =
+      String(req.headers["x-scheduler-secret"] || "").trim() ||
+      String(req.query.secret || "").trim();
+
+    if (!config.schedulerSecret) {
+      throw createHttpError(503, "SCHEDULER_SECRET is not configured.");
+    }
+    if (!suppliedSecret || suppliedSecret !== config.schedulerSecret) {
+      throw createHttpError(401, "Invalid scheduler secret.");
+    }
+
+    const batchSize = Number.parseInt(String(req.query.batch || "25"), 10);
+    const safeBatchSize = Number.isFinite(batchSize)
+      ? Math.max(1, Math.min(batchSize, 100))
+      : 25;
+
+    const campaignProcessed = await dispatchDueScheduledCampaigns(getDb(), {
+      batchSize: safeBatchSize,
+    });
+    const emailResult = await processDueScheduledEmails(getDb(), {
+      batchSize: safeBatchSize,
+    });
+
+    res.json({
+      message: "Scheduler processing completed.",
+      campaign_dispatch: {
+        processed: campaignProcessed,
+      },
+      email_dispatch: emailResult,
+    });
+  }),
+);
+
 app.use((req, _res, next) => {
   next(
     createHttpError(404, `Route not found: ${req.method} ${req.originalUrl}`),
@@ -460,40 +520,5 @@ app.use((error, _req, res, _next) => {
   res.status(status).json(body);
 });
 
-async function startServer() {
-  await ready;
-  console.log(
-    `Super admin seed ensured for ${config.superAdminEmail} (name: ${config.superAdminName}).`,
-  );
-  app.listen(config.port, () => {
-    console.log(
-      `Cogitation Works backend listening on http://localhost:${config.port}`,
-    );
-  });
-
-  if (!schedulerHandle) {
-    schedulerHandle = setInterval(async () => {
-      try {
-        const processed = await dispatchDueScheduledCampaigns(getDb(), {
-          batchSize: 20,
-        });
-        if (processed > 0) {
-          console.log(`Scheduler dispatched ${processed} due campaign(s).`);
-        }
-      } catch (error) {
-        console.error("Scheduled dispatch loop failed", error);
-      }
-    }, 1000);
-  }
-}
-
-if (require.main === module) {
-  startServer().catch((error) => {
-    console.error("Failed to start server", error);
-    process.exit(1);
-  });
-}
-
 module.exports = app;
-module.exports.startServer = startServer;
 module.exports.ready = ready;

@@ -1,6 +1,6 @@
-# Cogitation Works Backend
+# Cogitation Works Backend Services
 
-This backend is now an Express + MongoDB service with a `server.js` entrypoint.
+Backend services are used by serverless API handlers under the root `api` folder.
 
 ## Stack
 
@@ -10,25 +10,23 @@ This backend is now an Express + MongoDB service with a `server.js` entrypoint.
 - Nodemailer SMTP
 - Multer file uploads
 
-## Seeded Super Admin
+## Super Admin Seeding
 
-On startup the backend ensures this super admin exists in MongoDB:
+On startup, the backend ensures the super admin from environment variables exists:
 
-- Name: `superadmin`
-- Email: `info@cogitationworks.com`
-- Password: `CW@dec032025`
-
-This account is seeded in the database only. It is not meant to be hardcoded into the frontend UI.
+- `SUPER_ADMIN_NAME`
+- `SUPER_ADMIN_EMAIL`
+- `SUPER_ADMIN_PASSWORD`
 
 ## Run Locally
 
 ```powershell
-cd "C:\Users\cogit\Desktop\Cogitation Works Email Template\backend"
+cd "C:\Users\cogit\Desktop\Cogitation Works Email Template"
 npm install
-npm run dev
+vercel dev
 ```
 
-The API runs on `http://localhost:8000` by default.
+The API is available under `http://localhost:3000/api` with `vercel dev`.
 
 To force-reset the seeded super admin row:
 
@@ -45,6 +43,7 @@ Copy `.env.example` to `.env` and set:
 - `MONGODB_DB_NAME`
 - `JWT_SECRET_KEY`
 - SMTP values if live email should send
+- `SCHEDULER_SECRET` (for `/api/scheduler/process`)
 
 ## Main Routes
 
@@ -64,3 +63,5 @@ Copy `.env.example` to `.env` and set:
 - `POST /api/leads/client-lead/send`
 - `GET /api/leads/client-lead/history`
 - `POST /api/leads/client-lead/sent/:recordId/resend`
+- `POST /api/scheduler/schedule`
+- `POST /api/scheduler/process`
