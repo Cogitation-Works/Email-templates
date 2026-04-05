@@ -1,0 +1,23 @@
+.venv/
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/node_modules/
+backend/storage/
+frontend/node_modules/
+frontend/dist/
+example doc/
+**/__pycache__/
+*.pyc
+
+# Environment files (keep examples committed)
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
