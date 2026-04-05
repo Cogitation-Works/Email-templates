@@ -43,17 +43,29 @@ function buildSmtpAccount(key, options) {
 }
 
 const frontendOrigins = (() => {
-  const explicitOrigins = normalizeString(process.env.FRONTEND_ORIGINS);
-  if (explicitOrigins) {
-    return explicitOrigins
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean);
-  }
+  const explicitOrigins = normalizeString(process.env.FRONTEND_ORIGINS)
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
-  return [
-    normalizeString(process.env.FRONTEND_ORIGIN, "http://localhost:5173"),
-  ];
+  const configuredOrigin = normalizeString(process.env.FRONTEND_ORIGIN);
+  const vercelUrl = normalizeString(process.env.VERCEL_URL);
+  const vercelOrigin = vercelUrl
+    ? vercelUrl.startsWith("http")
+      ? vercelUrl
+      : `https://${vercelUrl}`
+    : "";
+
+  const origins = [
+    ...explicitOrigins,
+    configuredOrigin,
+    vercelOrigin,
+    "http://localhost:5173",
+  ]
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return [...new Set(origins)];
 })();
 
 const smtpAccounts = [
