@@ -123,7 +123,6 @@ app.use(async (req, res, next) => {
     next();
   } catch (error) {
     if (req.path === `${config.apiPrefix}/auth/me` || req.path === "/auth/me") {
-      clearSessionCookie(res);
       res.json({ user: null });
       return;
     }
@@ -270,12 +269,12 @@ app.get(
       if (error && typeof error === "object") {
         const maybeError = error;
         if (maybeError.status === 401) {
+          clearSessionCookie(res);
           res.json({ user: null });
           return;
         }
       }
 
-      clearSessionCookie(res);
       res.json({ user: null });
     }
   }),

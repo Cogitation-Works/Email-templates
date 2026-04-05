@@ -8,6 +8,22 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
+function AuthLoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-[var(--bg)] text-[var(--text)]">
+      <div className="flex flex-col items-center gap-4">
+        <img
+          alt="Cogitation Works"
+          className="h-12 w-12 object-contain"
+          src="/cw-logo.png"
+        />
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--line)] border-t-[var(--accent)]" />
+        <p className="text-sm text-[var(--muted)]">{message}</p>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({
   children,
   roles,
@@ -19,21 +35,7 @@ function ProtectedRoute({
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-[var(--bg)] text-[var(--text)]">
-        <div className="flex flex-col items-center gap-4">
-          <img
-            alt="Cogitation Works"
-            className="h-12 w-12 object-contain"
-            src="/cw-logo.png"
-          />
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--line)] border-t-[var(--accent)]" />
-          <p className="text-sm text-[var(--muted)]">
-            Preparing command center...
-          </p>
-        </div>
-      </div>
-    );
+    return <AuthLoadingScreen message="Preparing command center..." />;
   }
 
   if (!user) {
@@ -52,13 +54,15 @@ function ProtectedRoute({
 }
 
 export default function App() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   return (
     <Routes>
       <Route
         element={
-          user ? (
+          loading ? (
+            <AuthLoadingScreen message="Checking your session..." />
+          ) : user ? (
             <Navigate replace to="/workspace" />
           ) : (
             <Navigate replace to="/signin" />
@@ -66,7 +70,18 @@ export default function App() {
         }
         path="/"
       />
-      <Route element={<SignInPage />} path="/signin" />
+      <Route
+        element={
+          loading ? (
+            <AuthLoadingScreen message="Checking your session..." />
+          ) : user ? (
+            <Navigate replace to="/workspace" />
+          ) : (
+            <SignInPage />
+          )
+        }
+        path="/signin"
+      />
       <Route
         element={
           <ProtectedRoute roles={["super_admin", "user"]}>

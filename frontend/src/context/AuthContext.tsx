@@ -84,11 +84,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void refreshSession();
   }, [location.pathname]);
 
-  useEffect(() => {
-    // Check for existing session on app mount (important for "remember me" after browser restart)
-    void refreshSession();
-  }, []);
-
   const value = useMemo<AuthContextValue>(
     () => ({
       user,

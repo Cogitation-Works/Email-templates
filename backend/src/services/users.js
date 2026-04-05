@@ -58,29 +58,53 @@ async function ensureSuperAdmin(db) {
     .sort({ created_at: 1 })
     .toArray();
 
-  const createdAt = existingCandidates[0]?.created_at ?? now;
+  const canonical = existingCandidates[0] ?? null;
 
-  const superAdmin = {
-    full_name: config.superAdminName,
-    email: config.superAdminEmail,
-    phone: config.companyPhone,
-    role: "super_admin",
-    hashed_password: await hashPassword(config.superAdminPassword),
-    can_view_team_history: true,
-    can_use_sales_sender: true,
-    can_use_admin_sender: true,
-    created_at: createdAt,
-    updated_at: now,
-    last_login: null,
-    must_change_password: false,
-  };
+  if (!canonical) {
+    const superAdmin = {
+      full_name: config.superAdminName,
+      email: config.superAdminEmail,
+      phone: config.companyPhone,
+      role: "super_admin",
+      hashed_password: await hashPassword(config.superAdminPassword),
+      can_view_team_history: true,
+      can_use_sales_sender: true,
+      can_use_admin_sender: true,
+      created_at: now,
+      updated_at: now,
+      last_login: null,
+      must_change_password: false,
+    };
+    await db.collection(USERS_COLLECTION).insertOne(superAdmin);
+    return;
+  }
 
-  // Keep exactly one canonical super admin account.
-  await db.collection(USERS_COLLECTION).deleteMany({
-    $or: [{ role: "super_admin" }, { email: config.superAdminEmail }],
-  });
+  await db.collection(USERS_COLLECTION).updateOne(
+    { _id: canonical._id },
+    {
+      $set: {
+        full_name: config.superAdminName,
+        email: config.superAdminEmail,
+        phone: config.companyPhone,
+        role: "super_admin",
+        can_view_team_history: true,
+        can_use_sales_sender: true,
+        can_use_admin_sender: true,
+        updated_at: now,
+        must_change_password: false,
+      },
+    },
+  );
 
-  await db.collection(USERS_COLLECTION).insertOne(superAdmin);
+  const duplicateIds = existingCandidates
+    .slice(1)
+    .map((candidate) => candidate._id)
+    .filter(Boolean);
+  if (duplicateIds.length) {
+    await db.collection(USERS_COLLECTION).deleteMany({
+      _id: { $in: duplicateIds },
+    });
+  }
 }
 
 async function getUserById(db, userId) {
