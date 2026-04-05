@@ -78,6 +78,14 @@ app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.use((req, _res, next) => {
+  const prefix = config.apiPrefix;
+  if (prefix && prefix !== "/" && !req.path.startsWith(prefix)) {
+    req.url = `${prefix}${req.url}`;
+  }
+  next();
+});
+
 let database = null;
 const ready = (async () => {
   database = await connectDatabase();
