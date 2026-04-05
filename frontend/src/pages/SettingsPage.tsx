@@ -1,4 +1,4 @@
-import { KeyRound, Mail, UserRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Mail, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import { ActionToast, type ActionToastState } from "@/components/ActionToast";
@@ -24,6 +24,8 @@ export function SettingsPage() {
   const [otpVerified, setOtpVerified] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [emailChangeChallengeId, setEmailChangeChallengeId] = useState("");
   const [maskedCurrentEmail, setMaskedCurrentEmail] = useState("");
@@ -429,21 +431,73 @@ export function SettingsPage() {
 
               {forgotStep === "password" ? (
                 <>
-                  <Field
-                    helper="Use at least 8 characters."
-                    label="New password"
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    placeholder="Enter new password"
-                    type="password"
-                    value={newPassword}
-                  />
-                  <Field
-                    label="Confirm new password"
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="Re-enter new password"
-                    type="password"
-                    value={confirmPassword}
-                  />
+                  <label className="block">
+                    <span className="field-label mb-2.5 block font-label text-[11px] font-extrabold uppercase tracking-[0.22em] text-[var(--soft)]">
+                      New password
+                    </span>
+                    <div className="relative">
+                      <input
+                        className="field-input h-[3.25rem] w-full rounded-xl border border-[var(--line)] bg-[var(--surface-lowest)] px-4 py-3.5 pr-12 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--soft)] focus:border-[rgba(var(--accent-rgb),0.26)] focus:ring-2 focus:ring-[rgba(var(--accent-rgb),0.12)]"
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        placeholder="Enter new password"
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                      />
+                      <button
+                        aria-label={
+                          showNewPassword
+                            ? "Hide new password"
+                            : "Show new password"
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[var(--muted)] transition hover:text-[var(--text)]"
+                        onClick={() => setShowNewPassword((value) => !value)}
+                        type="button"
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    <span className="field-helper mt-2 block text-xs leading-6 text-[var(--muted)]">
+                      Use at least 8 characters.
+                    </span>
+                  </label>
+                  <label className="block">
+                    <span className="field-label mb-2.5 block font-label text-[11px] font-extrabold uppercase tracking-[0.22em] text-[var(--soft)]">
+                      Confirm new password
+                    </span>
+                    <div className="relative">
+                      <input
+                        className="field-input h-[3.25rem] w-full rounded-xl border border-[var(--line)] bg-[var(--surface-lowest)] px-4 py-3.5 pr-12 text-sm text-[var(--text)] outline-none transition placeholder:text-[var(--soft)] focus:border-[rgba(var(--accent-rgb),0.26)] focus:ring-2 focus:ring-[rgba(var(--accent-rgb),0.12)]"
+                        onChange={(event) =>
+                          setConfirmPassword(event.target.value)
+                        }
+                        placeholder="Re-enter new password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                      />
+                      <button
+                        aria-label={
+                          showConfirmPassword
+                            ? "Hide confirm password"
+                            : "Show confirm password"
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[var(--muted)] transition hover:text-[var(--text)]"
+                        onClick={() =>
+                          setShowConfirmPassword((value) => !value)
+                        }
+                        type="button"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </label>
                   <button
                     className="w-full rounded-xl bg-[var(--accent)] px-5 py-3 text-sm font-black text-white"
                     disabled={busy === "password-reset"}
