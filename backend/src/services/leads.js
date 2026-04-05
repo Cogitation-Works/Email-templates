@@ -1150,6 +1150,61 @@ function buildCampaignOwnershipQuery(recordId, actor) {
   return { _id: objectId, owner_user_id: actor.id, ...activeCampaignClause() };
 }
 
+async function getClientLeadAttachmentForDownload(
+  db,
+  recordId,
+  actor,
+  category,
+  filename,
+) {
+  const normalizedCategory = String(category || "")
+    .trim()
+    .toLowerCase();
+  if (!["email", "internal", "personal"].includes(normalizedCategory)) {
+    throw createHttpError(422, "Invalid attachment category.");
+  }
+
+  const requestedName = String(filename || "").trim();
+  if (!requestedName) {
+    throw createHttpError(404, "Attachment not found.");
+  }
+
+  const query = buildCampaignOwnershipQuery(recordId, actor);
+  const document = await db.collection(LEAD_HISTORY_COLLECTION).findOne(query);
+  if (!document) {
+    throw createHttpError(404, "Sent email record not found.");
+  }
+
+  const categoryKey =
+    normalizedCategory === "personal" ? "internal" : normalizedCategory;
+
+  const internalAttachments = document.personal_attachments || [];
+  const outgoingAttachments = [
+    ...(document.email_attachments || []),
+    ...(document.emails || []).flatMap((email) => email.attachments || []),
+  ];
+
+  const candidates =
+    categoryKey === "internal" ? internalAttachments : outgoingAttachments;
+  const normalizedRequestedName = requestedName.toLowerCase();
+  const attachment = candidates.find(
+    (item) =>
+      String(item?.filename || "")
+        .trim()
+        .toLowerCase() === normalizedRequestedName && item?.source_path,
+  );
+
+  if (!attachment) {
+    throw createHttpError(404, "Attachment not found.");
+  }
+
+  return {
+    filename: attachment.filename,
+    content_type: attachment.content_type || "application/octet-stream",
+    source_path: attachment.source_path,
+  };
+}
+
 async function deleteClientLeadCampaign(db, recordId, actor) {
   if (actor.role !== "super_admin") {
     throw createHttpError(403, "Only super admin can delete sent campaigns.");
@@ -1340,6 +1395,7 @@ module.exports = {
   deleteClientLeadCampaign,
   dispatchDueScheduledCampaigns,
   ensureLeadIndexes,
+  getClientLeadAttachmentForDownload,
   getClientLeadHistorySections,
   getClientLeadTemplates,
   previewClientLeadEmails,

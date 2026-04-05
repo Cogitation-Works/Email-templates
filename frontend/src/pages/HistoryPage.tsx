@@ -15,6 +15,8 @@ import { StatusPill } from "../components/StatusPill";
 import { cn, formatDateTime, relativeTime } from "../lib/utils";
 import type { LeadHistorySection, SentLeadRecord } from "../types";
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+
 function sectionMotion(delay: number) {
   return {
     initial: { opacity: 0, y: 22 },
@@ -159,6 +161,15 @@ export function HistoryPage() {
   const previewRecord =
     allRecords.find((record) => record.id === previewRecordId) ?? null;
   const previewEmail = previewRecord?.emails?.[0] ?? null;
+  const internalAttachments = previewRecord?.personal_attachments ?? [];
+  const outgoingAttachments = previewRecord?.email_attachments ?? [];
+
+  const attachmentDownloadUrl = (
+    recordId: string,
+    category: "email" | "internal",
+    filename: string,
+  ) =>
+    `${API_BASE}/leads/client-lead/sent/${recordId}/attachments/${category}/${encodeURIComponent(filename)}`;
 
   useEffect(() => {
     if (previewRecordId && isMobile) {
@@ -189,11 +200,6 @@ export function HistoryPage() {
   const closePreview = () => {
     setPreviewRecordId("");
   };
-
-  const previewRecordAttachments = [
-    ...(previewRecord?.email_attachments ?? []),
-    ...(previewRecord?.personal_attachments ?? []),
-  ];
 
   const dock = (
     <div className="command-dock flex items-center gap-4 px-6 py-3">
@@ -381,6 +387,9 @@ export function HistoryPage() {
                         <p className="mt-2 text-sm font-bold text-[var(--text)]">
                           From {record.from_email}
                         </p>
+                        <p className="mt-1 text-sm font-bold text-[var(--text)]">
+                          To {record.clients[0]?.email ?? "-"}
+                        </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">
                           {record.email_attachments.length} outgoing attachment
                           {record.email_attachments.length === 1 ? "" : "s"}
@@ -532,6 +541,84 @@ export function HistoryPage() {
                           __html: previewEmail.html_body,
                         }}
                       />
+
+                      <div className="rounded-[1.4rem] bg-[var(--surface-lowest)] p-4">
+                        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                          Internal notes
+                        </p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
+                          {previewRecord.personal_use_paragraph ||
+                            "No internal notes saved."}
+                        </p>
+                      </div>
+
+                      <div className="rounded-[1.4rem] bg-[var(--surface-lowest)] p-4">
+                        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                          Internal attachments
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {internalAttachments.length === 0 ? (
+                            <p className="text-sm text-[var(--muted)]">
+                              No internal attachments.
+                            </p>
+                          ) : (
+                            internalAttachments.map((attachment) => (
+                              <a
+                                className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] transition hover:bg-[var(--surface-high)]"
+                                href={attachmentDownloadUrl(
+                                  previewRecord.id,
+                                  "internal",
+                                  attachment.filename,
+                                )}
+                                key={`mobile-internal-${previewRecord.id}-${attachment.filename}`}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <span className="truncate">
+                                  {attachment.filename}
+                                </span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                                  Download
+                                </span>
+                              </a>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[1.4rem] bg-[var(--surface-lowest)] p-4">
+                        <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                          Email attachments
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {outgoingAttachments.length === 0 ? (
+                            <p className="text-sm text-[var(--muted)]">
+                              No outgoing attachments.
+                            </p>
+                          ) : (
+                            outgoingAttachments.map((attachment) => (
+                              <a
+                                className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] transition hover:bg-[var(--surface-high)]"
+                                href={attachmentDownloadUrl(
+                                  previewRecord.id,
+                                  "email",
+                                  attachment.filename,
+                                )}
+                                key={`mobile-outgoing-${previewRecord.id}-${attachment.filename}`}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <span className="truncate">
+                                  {attachment.filename}
+                                </span>
+                                <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                                  Download
+                                </span>
+                              </a>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -601,20 +688,77 @@ export function HistoryPage() {
 
                         <div className="rounded-[1.6rem] bg-[var(--surface-lowest)] p-5">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
-                            Attachments
+                            Internal notes
                           </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {previewRecordAttachments.length === 0 ? (
+                          <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
+                            {previewRecord.personal_use_paragraph ||
+                              "No internal notes saved."}
+                          </p>
+                        </div>
+
+                        <div className="rounded-[1.6rem] bg-[var(--surface-lowest)] p-5">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                            Internal attachments
+                          </p>
+                          <div className="mt-3 space-y-2">
+                            {internalAttachments.length === 0 ? (
                               <p className="text-sm text-[var(--muted)]">
-                                No attachments stored.
+                                No internal attachments.
                               </p>
                             ) : (
-                              previewRecordAttachments.map((attachment) => (
-                                <StatusPill
-                                  key={`${previewRecord.id}-${attachment.filename}`}
-                                  label={attachment.filename}
-                                  tone="accent"
-                                />
+                              internalAttachments.map((attachment) => (
+                                <a
+                                  className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] transition hover:bg-[var(--surface-high)]"
+                                  href={attachmentDownloadUrl(
+                                    previewRecord.id,
+                                    "internal",
+                                    attachment.filename,
+                                  )}
+                                  key={`internal-${previewRecord.id}-${attachment.filename}`}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  <span className="truncate">
+                                    {attachment.filename}
+                                  </span>
+                                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                                    Download
+                                  </span>
+                                </a>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[1.6rem] bg-[var(--surface-lowest)] p-5">
+                          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                            Email attachments
+                          </p>
+                          <div className="mt-3 space-y-2">
+                            {outgoingAttachments.length === 0 ? (
+                              <p className="text-sm text-[var(--muted)]">
+                                No outgoing attachments.
+                              </p>
+                            ) : (
+                              outgoingAttachments.map((attachment) => (
+                                <a
+                                  className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text)] transition hover:bg-[var(--surface-high)]"
+                                  href={attachmentDownloadUrl(
+                                    previewRecord.id,
+                                    "email",
+                                    attachment.filename,
+                                  )}
+                                  key={`outgoing-${previewRecord.id}-${attachment.filename}`}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  <span className="truncate">
+                                    {attachment.filename}
+                                  </span>
+                                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)]">
+                                    Download
+                                  </span>
+                                </a>
                               ))
                             )}
                           </div>

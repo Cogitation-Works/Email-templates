@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+const zlib = require("zlib");
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
@@ -35,6 +38,7 @@ const {
   previewClientLeadEmails,
   sendClientLeadCampaign,
   getClientLeadHistorySections,
+  getClientLeadAttachmentForDownload,
   resendClientLeadCampaign,
   dispatchDueScheduledCampaigns,
   cancelScheduledClientLeadCampaign,
@@ -108,6 +112,11 @@ app.use(async (req, res, next) => {
     await ready;
     next();
   } catch (error) {
+    if (req.path === `${config.apiPrefix}/auth/me` || req.path === "/auth/me") {
+      clearSessionCookie(res);
+      res.json({ user: null });
+      return;
+    }
     next(error);
   }
 });
@@ -389,6 +398,43 @@ app.get(
     ]);
     const response = await getClientLeadHistorySections(getDb(), currentUser);
     res.json(response);
+  }),
+);
+
+app.get(
+  `${config.apiPrefix}/leads/client-lead/sent/:recordId/attachments/:category/:filename`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+
+    const attachment = await getClientLeadAttachmentForDownload(
+      getDb(),
+      req.params.recordId,
+      currentUser,
+      req.params.category,
+      decodeURIComponent(req.params.filename || ""),
+    );
+
+    const sourcePath = path.resolve(attachment.source_path);
+    if (!fs.existsSync(sourcePath)) {
+      throw createHttpError(404, "Attachment file not found.");
+    }
+
+    const fileBuffer = sourcePath.endsWith(".gz")
+      ? zlib.gunzipSync(fs.readFileSync(sourcePath))
+      : fs.readFileSync(sourcePath);
+
+    const safeFileName = String(attachment.filename || "attachment")
+      .replace(/\"/g, "'")
+      .trim();
+    res.setHeader("Content-Type", attachment.content_type);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${safeFileName || "attachment"}"`,
+    );
+    res.send(fileBuffer);
   }),
 );
 

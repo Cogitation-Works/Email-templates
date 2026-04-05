@@ -128,7 +128,7 @@ export function WorkspacePage() {
   );
   const [emailDetailsParagraph, setEmailDetailsParagraph] = useState("");
   const [includeOutboundParagraph, setIncludeOutboundParagraph] =
-    useState(true);
+    useState(false);
   const [personalUseParagraph, setPersonalUseParagraph] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
   const [preview, setPreview] = useState<LeadPreviewResponse | null>(null);
@@ -148,9 +148,9 @@ export function WorkspacePage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState<ActionToastState | null>(null);
-  const [previewViewport, setPreviewViewport] = useState<
-    "mobile" | "tablet" | "desktop"
-  >("desktop");
+  const [previewViewport, setPreviewViewport] = useState<"mobile" | "tab">(
+    "tab",
+  );
   const scheduleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -389,11 +389,7 @@ export function WorkspacePage() {
     ) ?? previewVariants[0];
   const previewEmail = activeVariant?.previews[0];
   const previewViewportClass =
-    previewViewport === "mobile"
-      ? "md:max-w-[390px]"
-      : previewViewport === "tablet"
-        ? "md:max-w-[768px]"
-        : "md:max-w-none";
+    previewViewport === "mobile" ? "max-w-[390px]" : "w-full max-w-none";
 
   const validateBeforeSubmit = () => {
     if (senderMode === "gmail" && !gmailAddress.trim()) {
@@ -450,6 +446,19 @@ export function WorkspacePage() {
         combinedOutgoingAttachments,
         personalAttachments,
       );
+      setSenderMode("gmail");
+      setGmailAddress("");
+      setDeliveryMode("single");
+      setClients([blankClient()]);
+      setSelectedTechnologies([]);
+      setEmailDetailsParagraph("");
+      setIncludeOutboundParagraph(false);
+      setPersonalUseParagraph("");
+      setScheduledFor("");
+      setPreview(null);
+      setEmailAttachments([]);
+      setPersonalAttachments([]);
+      setPreviewViewport("tab");
       setMessage(response.message);
       showToast("success", response.message);
     } catch (err) {
@@ -469,7 +478,7 @@ export function WorkspacePage() {
     setClients([blankClient()]);
     setSelectedTechnologies([]);
     setEmailDetailsParagraph("");
-    setIncludeOutboundParagraph(true);
+    setIncludeOutboundParagraph(false);
     setPersonalUseParagraph("");
     setScheduledFor("");
     setPreview(null);
@@ -1235,8 +1244,7 @@ export function WorkspacePage() {
                       <div className="hidden items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-1 md:inline-flex">
                         {[
                           { id: "mobile", label: "Mobile" },
-                          { id: "tablet", label: "Tab" },
-                          { id: "desktop", label: "Desktop" },
+                          { id: "tab", label: "Tab" },
                         ].map((option) => (
                           <button
                             className={cn(
@@ -1247,9 +1255,7 @@ export function WorkspacePage() {
                             )}
                             key={option.id}
                             onClick={() =>
-                              setPreviewViewport(
-                                option.id as "mobile" | "tablet" | "desktop",
-                              )
+                              setPreviewViewport(option.id as "mobile" | "tab")
                             }
                             type="button"
                           >
@@ -1306,7 +1312,6 @@ export function WorkspacePage() {
                         <div
                           className={cn(
                             "mx-auto mt-4 overflow-hidden rounded-[1.4rem] border border-[var(--line)] bg-[var(--surface-strong)]",
-                            "max-w-[390px]",
                             previewViewportClass,
                           )}
                         >
