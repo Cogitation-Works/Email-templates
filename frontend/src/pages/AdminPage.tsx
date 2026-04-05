@@ -8,21 +8,21 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "@/api/client";
+import { api } from "../api/client";
 import {
   ActionToast,
   actionToastDurationMs,
   type ActionToastState,
-} from "@/components/ActionToast";
-import { AppShell } from "@/components/AppShell";
-import { Field } from "@/components/Field";
-import { StatusPill } from "@/components/StatusPill";
-import { UserCard } from "@/components/UserCard";
+} from "../components/ActionToast";
+import { AppShell } from "../components/AppShell";
+import { Field } from "../components/Field";
+import { StatusPill } from "../components/StatusPill";
+import { UserCard } from "../components/UserCard";
 import type {
   ManagedUserCreateResponse,
   ManagedUserPasswordResetResponse,
   User,
-} from "@/types";
+} from "../types";
 
 const initialForm = {
   full_name: "",

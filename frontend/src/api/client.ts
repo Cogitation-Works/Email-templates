@@ -16,7 +16,7 @@ import type {
   TemplateVariant,
   UpdateUserPayload,
   User,
-} from "@/types";
+} from "../types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 

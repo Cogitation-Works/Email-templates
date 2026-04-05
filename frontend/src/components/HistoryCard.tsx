@@ -1,9 +1,9 @@
 import { CheckCircle2, Eye, Mail, RotateCw } from "lucide-react";
 import { useState } from "react";
 
-import { StatusPill } from "@/components/StatusPill";
-import { compactText, formatDateTime, relativeTime } from "@/lib/utils";
-import type { SentLeadRecord } from "@/types";
+import { StatusPill } from "./StatusPill";
+import { compactText, formatDateTime, relativeTime } from "../lib/utils";
+import type { SentLeadRecord } from "../types";
 
 export function HistoryCard({
   record,

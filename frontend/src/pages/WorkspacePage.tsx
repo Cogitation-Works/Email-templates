@@ -13,23 +13,23 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api } from "@/api/client";
+import { api } from "../api/client";
 import {
   ActionToast,
   actionToastDurationMs,
   type ActionToastState,
-} from "@/components/ActionToast";
-import { AppShell } from "@/components/AppShell";
-import { Field } from "@/components/Field";
-import { FileInput } from "@/components/FileInput";
-import { StatusPill } from "@/components/StatusPill";
-import { useAuth } from "@/context/AuthContext";
-import { cn } from "@/lib/utils";
+} from "../components/ActionToast";
+import { AppShell } from "../components/AppShell";
+import { Field } from "../components/Field";
+import { FileInput } from "../components/FileInput";
+import { StatusPill } from "../components/StatusPill";
+import { useAuth } from "../context/AuthContext";
+import { cn } from "../lib/utils";
 import type {
   LeadPreviewResponse,
   LeadSenderMode,
   TemplateVariant,
-} from "@/types";
+} from "../types";
 
 function blankClient() {
   return { name: "", email: "", phone: "" };

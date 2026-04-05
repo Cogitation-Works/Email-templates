@@ -1,10 +1,10 @@
 import { Eye, EyeOff, KeyRound, Mail, UserRound } from "lucide-react";
 import { useState } from "react";
 
-import { ActionToast, type ActionToastState } from "@/components/ActionToast";
-import { AppShell } from "@/components/AppShell";
-import { Field } from "@/components/Field";
-import { useAuth } from "@/context/AuthContext";
+import { ActionToast, type ActionToastState } from "../components/ActionToast";
+import { AppShell } from "../components/AppShell";
+import { Field } from "../components/Field";
+import { useAuth } from "../context/AuthContext";
 
 export function SettingsPage() {
   const {

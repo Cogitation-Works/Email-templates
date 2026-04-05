@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { api } from "@/api/client";
-import { AppShell } from "@/components/AppShell";
-import { StatusPill } from "@/components/StatusPill";
-import { cn, formatDateTime, relativeTime } from "@/lib/utils";
-import type { LeadHistorySection, SentLeadRecord } from "@/types";
+import { api } from "../api/client";
+import { AppShell } from "../components/AppShell";
+import { StatusPill } from "../components/StatusPill";
+import { cn, formatDateTime, relativeTime } from "../lib/utils";
+import type { LeadHistorySection, SentLeadRecord } from "../types";
 
 function sectionMotion(delay: number) {
   return {

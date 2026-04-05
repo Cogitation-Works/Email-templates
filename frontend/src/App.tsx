@@ -1,12 +1,12 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
-import { useAuth } from "@/context/AuthContext";
-import { AdminPage } from "@/pages/AdminPage";
-import { HistoryPage } from "@/pages/HistoryPage";
-import { LogsPage } from "@/pages/LogsPage";
+import { useAuth } from "./context/AuthContext";
+import { AdminPage } from "./pages/AdminPage";
+import { HistoryPage } from "./pages/HistoryPage";
+import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { SignInPage } from "@/pages/SignInPage";
-import { WorkspacePage } from "@/pages/WorkspacePage";
+import { SignInPage } from "./pages/SignInPage";
+import { WorkspacePage } from "./pages/WorkspacePage";
 
 function ProtectedRoute({
   children,

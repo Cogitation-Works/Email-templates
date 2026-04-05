@@ -1,9 +1,9 @@
 import { motion } from "framer-motion";
 import { KeyRound, PencilLine, Trash2 } from "lucide-react";
 
-import { StatusPill } from "@/components/StatusPill";
-import { formatDateTime, relativeTime } from "@/lib/utils";
-import type { User } from "@/types";
+import { StatusPill } from "./StatusPill";
+import { formatDateTime, relativeTime } from "../lib/utils";
+import type { User } from "../types";
 
 export function UserCard({
   user,

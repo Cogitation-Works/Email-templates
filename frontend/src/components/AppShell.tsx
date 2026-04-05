@@ -15,11 +15,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import { Brand } from "@/components/Brand";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { useAuth } from "@/context/AuthContext";
-import { cn } from "@/lib/utils";
-import type { Role } from "@/types";
+import { Brand } from "./Brand";
+import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "../context/AuthContext";
+import { cn } from "../lib/utils";
+import type { Role } from "../types";
 
 const navConfig = [
   {

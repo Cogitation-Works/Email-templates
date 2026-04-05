@@ -8,13 +8,13 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 
-import { ApiError, api } from "@/api/client";
+import { ApiError, api } from "../api/client";
 import type {
   EmailChangeStartResponse,
   ForgotPasswordStartResponse,
   LoginChallengeResponse,
   User,
-} from "@/types";
+} from "../types";
 
 interface AuthContextValue {
   user: User | null;

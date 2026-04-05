@@ -11,8 +11,8 @@ import {
   formatMetadata,
   humanize,
   relativeTime,
-} from "@/lib/utils";
-import type { AuditLog } from "@/types";
+} from "../lib/utils";
+import type { AuditLog } from "../types";
 
 function toneForAction(action: string) {
   if (action.includes("password")) {

@@ -16,15 +16,15 @@ import {
 } from "react";
 import { Navigate } from "react-router-dom";
 
-import { Brand } from "@/components/Brand";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { useAuth } from "@/context/AuthContext";
-import { useThemeMode } from "@/context/ThemeContext";
-import { cn } from "@/lib/utils";
+import { Brand } from "../components/Brand";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { useAuth } from "../context/AuthContext";
+import { useThemeMode } from "../context/ThemeContext";
+import { cn } from "../lib/utils";
 import type {
   ForgotPasswordStartResponse,
   LoginChallengeResponse,
-} from "@/types";
+} from "../types";
 
 const OTP_LENGTH = 6;
 const TOAST_DURATION_MS = 4500;
