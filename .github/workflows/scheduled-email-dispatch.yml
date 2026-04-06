@@ -22,8 +22,43 @@ jobs:
             echo "SCHEDULER_SECRET secret is missing"
             exit 1
           fi
+          NORMALIZED_URL="${SCHEDULER_URL%/}"
+          if [[ "$NORMALIZED_URL" == http://localhost* ]] || [[ "$NORMALIZED_URL" == http://127.0.0.1* ]]; then
+            echo "SCHEDULER_URL points to localhost. GitHub Actions runners cannot reach your local machine."
+            exit 1
+          fi
 
-          curl --fail --show-error --silent \
+          if [[ "$NORMALIZED_URL" == */api/scheduler/process ]] || [[ "$NORMALIZED_URL" == */scheduler/process ]]; then
+            SCHEDULER_ENDPOINT="$NORMALIZED_URL"
+          elif [[ "$NORMALIZED_URL" == */api ]]; then
+            SCHEDULER_ENDPOINT="$NORMALIZED_URL/scheduler/process"
+          else
+            SCHEDULER_ENDPOINT="$NORMALIZED_URL/api/scheduler/process"
+          fi
+
+          set +e
+          HTTP_CODE=$(curl --show-error --silent \
+            -o scheduler-response.json \
+            -w "%{http_code}" \
             -X POST \
             -H "x-scheduler-secret: $SCHEDULER_SECRET" \
-            "$SCHEDULER_URL/api/scheduler/process"
+            "$SCHEDULER_ENDPOINT")
+          CURL_EXIT=$?
+          set -e
+
+          if [[ "$CURL_EXIT" -ne 0 ]]; then
+            echo "Scheduler call failed before HTTP response (curl exit $CURL_EXIT)"
+            if [ -f scheduler-response.json ]; then
+              cat scheduler-response.json
+            fi
+            exit 1
+          fi
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            echo "Scheduler call failed with HTTP $HTTP_CODE"
+            cat scheduler-response.json
+            exit 1
+          fi
+
+          echo "Scheduler call succeeded with HTTP $HTTP_CODE"
+          cat scheduler-response.json

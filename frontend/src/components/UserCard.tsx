@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { KeyRound, PencilLine, Trash2 } from "lucide-react";
 
 import { StatusPill } from "./StatusPill";
-import { formatDateTime, relativeTime } from "../lib/utils";
+import { formatDateTime } from "../lib/utils";
 import type { User } from "../types";
 
 export function UserCard({
@@ -60,18 +60,20 @@ export function UserCard({
       <div className="mt-6 grid gap-3 rounded-2xl bg-[var(--surface-muted)] p-5 sm:grid-cols-2 2xl:grid-cols-4">
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
-            History
+            Sent history
           </p>
           <p className="mt-2 text-sm font-bold text-[var(--text)]">
-            {user.can_view_team_history ? "Team visible" : "Private only"}
+            {user.can_view_other_sent_history ? "Others visible" : "Self only"}
           </p>
         </div>
         <div>
           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
-            Last login
+            Client replies
           </p>
           <p className="mt-2 text-sm font-bold text-[var(--text)]">
-            {relativeTime(user.last_login)}
+            {user.can_view_other_client_replies
+              ? "Others visible"
+              : "Self only"}
           </p>
         </div>
         <div>

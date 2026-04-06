@@ -11,6 +11,7 @@ const {
 } = require("../config");
 const { logAction } = require("./audit");
 const { deliverEmail, previewAttachment, previewEmail } = require("./emailer");
+const { summarizeClientRepliesForCampaigns } = require("./replies");
 const {
   createHttpError,
   ensureObjectId,
@@ -48,6 +49,10 @@ const PITCH_DECK_CANDIDATES = [
     "CogitationWorks_PitchDeck (1).pdf",
   ),
 ];
+const BRAND_LOGO_CANDIDATES = [
+  path.join(config.workspaceRoot, "images", "CW_logo_only.png"),
+];
+let cachedBrandLogoPath = null;
 
 const CLIENT_LEAD_VARIANTS = [
   {
@@ -125,6 +130,23 @@ function getPitchDeckPath() {
       }
     }) || null
   );
+}
+
+function getBrandLogoPath() {
+  if (cachedBrandLogoPath) {
+    return cachedBrandLogoPath;
+  }
+
+  cachedBrandLogoPath =
+    BRAND_LOGO_CANDIDATES.find((candidate) => {
+      try {
+        return require("fs").existsSync(candidate);
+      } catch (_error) {
+        return false;
+      }
+    }) || null;
+
+  return cachedBrandLogoPath;
 }
 
 function resolveSenderEmail(senderMode, customSenderEmail) {
@@ -313,6 +335,9 @@ function internalAttachmentRecord(attachment) {
     size_bytes: attachment.size_bytes ?? null,
     compressed_size_bytes: attachment.compressed_size_bytes ?? null,
     source_path: attachment.source_path ?? null,
+    cid: attachment.cid ?? null,
+    content_disposition: attachment.content_disposition ?? null,
+    hidden_in_ui: Boolean(attachment.hidden_in_ui),
   };
 }
 
@@ -322,6 +347,7 @@ function publicAttachmentRecord(attachment) {
     filename: attachment.filename,
     content_type: attachment.content_type,
     size_bytes: attachment.size_bytes ?? null,
+    hidden_in_ui: Boolean(attachment.hidden_in_ui),
   };
 }
 
@@ -336,7 +362,9 @@ function publicPreview(preview) {
     text_body: preview.text_body,
     from_name: preview.from_name,
     from_email: preview.from_email,
-    attachments: (preview.attachments || []).map(publicAttachmentRecord),
+    attachments: (preview.attachments || [])
+      .filter((attachment) => !attachment?.hidden_in_ui)
+      .map(publicAttachmentRecord),
   };
 }
 
@@ -354,12 +382,12 @@ function publicSentRecord(document) {
     technologies: document.technologies || [],
     email_details_paragraph: document.email_details_paragraph ?? null,
     personal_use_paragraph: document.personal_use_paragraph ?? null,
-    email_attachments: (document.email_attachments || []).map(
-      publicAttachmentRecord,
-    ),
-    personal_attachments: (document.personal_attachments || []).map(
-      publicAttachmentRecord,
-    ),
+    email_attachments: (document.email_attachments || [])
+      .filter((attachment) => !attachment?.hidden_in_ui)
+      .map(publicAttachmentRecord),
+    personal_attachments: (document.personal_attachments || [])
+      .filter((attachment) => !attachment?.hidden_in_ui)
+      .map(publicAttachmentRecord),
     emails: (document.emails || []).map(publicPreview),
     delivery_results: document.delivery_results || [],
     created_by: document.created_by,
@@ -369,6 +397,11 @@ function publicSentRecord(document) {
     resend_count: document.resend_count || 0,
     scheduled_for: document.scheduled_for ?? null,
     dispatch_status: document.dispatch_status || "sent",
+    reply_count: Number.parseInt(String(document.reply_count || 0), 10) || 0,
+    latest_reply_at: document.latest_reply_at ?? null,
+    client_replies: Array.isArray(document.client_replies)
+      ? document.client_replies
+      : [],
   };
 }
 
@@ -376,6 +409,127 @@ function activeCampaignClause() {
   return {
     $or: [{ deleted_at: { $exists: false } }, { deleted_at: null }],
   };
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildExactNameRegex(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return null;
+  }
+  return new RegExp(`^\\s*${escapeRegex(normalized)}\\s*$`, "i");
+}
+
+function buildSuperAdminNameMatchers(actor = null) {
+  const candidates = [
+    String(config.superAdminName || "").trim(),
+    String(actor?.full_name || "").trim(),
+    "superadmin",
+  ];
+
+  return [...new Set(candidates.filter(Boolean))]
+    .map((value) => buildExactNameRegex(value))
+    .filter(Boolean);
+}
+
+function buildQueryAnd(clauses) {
+  const filtered = (clauses || []).filter(
+    (clause) => clause && Object.keys(clause).length > 0,
+  );
+  if (!filtered.length) {
+    return {};
+  }
+  if (filtered.length === 1) {
+    return filtered[0];
+  }
+  return { $and: filtered };
+}
+
+function isUnsetOwnerClause() {
+  return {
+    $or: [
+      { owner_user_id: { $exists: false } },
+      { owner_user_id: null },
+      { owner_user_id: "" },
+    ],
+  };
+}
+
+function buildOwnerIdMatchClause(actorId) {
+  const values = [actorId];
+  if (ObjectId.isValid(actorId)) {
+    values.push(new ObjectId(actorId));
+  }
+
+  return {
+    owner_user_id: {
+      $in: values,
+    },
+  };
+}
+
+function buildLegacyOwnerFallbackClause(actor) {
+  const createdBy = String(actor?.full_name || "").trim();
+  const createdByRole = String(actor?.role || "").trim();
+  const creatorNameRegex = buildExactNameRegex(createdBy);
+  if (!createdBy) {
+    return null;
+  }
+
+  return {
+    $and: [
+      isUnsetOwnerClause(),
+      creatorNameRegex ? { created_by: creatorNameRegex } : { created_by: createdBy },
+      ...(createdByRole
+        ? [
+            {
+              $or: [
+                { created_by_role: createdByRole },
+                { created_by_role: { $exists: false } },
+                { created_by_role: null },
+                { created_by_role: "" },
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+function buildSuperAdminCreatorScope(actor) {
+  if (String(actor?.role || "") !== "super_admin") {
+    return null;
+  }
+
+  const names = buildSuperAdminNameMatchers(actor);
+
+  return {
+    $or: [
+      { created_by_role: "super_admin" },
+      ...(names.length ? [{ created_by: { $in: names } }] : []),
+    ],
+  };
+}
+
+function buildSelfCampaignScope(actor) {
+  const clauses = [buildOwnerIdMatchClause(actor.id)];
+  const legacyFallback = buildLegacyOwnerFallbackClause(actor);
+  if (legacyFallback) {
+    clauses.push(legacyFallback);
+  }
+  const superAdminCreatorScope = buildSuperAdminCreatorScope(actor);
+  if (superAdminCreatorScope) {
+    clauses.push(superAdminCreatorScope);
+  }
+
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
+}
+
+function buildOtherCampaignScope(actor) {
+  return { $nor: [buildSelfCampaignScope(actor)] };
 }
 
 function summarizeDeliveryResults(deliveryResults) {
@@ -398,6 +552,16 @@ function summarizeDeliveryResults(deliveryResults) {
     failed,
     dispatch_status: dispatchStatus,
   };
+}
+
+function unwrapFindOneAndUpdateResult(result) {
+  if (!result) {
+    return null;
+  }
+  if (typeof result === "object" && "value" in result) {
+    return result.value || null;
+  }
+  return result;
 }
 
 async function persistUploadedAttachments(files, { category, recordKey }) {
@@ -455,6 +619,8 @@ function renderClientLeadEmail({
       : `Feel free to reply to this email or call us at ${contactNumbersInline}.`;
 
   const pitchDeckPath = getPitchDeckPath();
+  const brandLogoPath = getBrandLogoPath();
+  const brandLogoCid = "cw-logo-inline";
 
   const documentNames = [];
   if (pitchDeckPath) {
@@ -663,11 +829,29 @@ function renderClientLeadEmail({
     </div>
 
     <!-- Footer -->
-    <div style="border-top: 1px solid #e2e8f0; padding: 20px 36px; background: #f8fafc;">
-      <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 2;">
-        <strong style="display: block; font-size: 14px; color: #0f172a; margin-bottom: 2px;">${escapeHtml(config.companyName)}</strong>
-        ${escapeHtml(contactNumbersInline)}&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="${escapeHtml(config.companyWebsite)}" target="_blank" rel="noreferrer" style="color: ${design.accent}; text-decoration: none;">${escapeHtml(config.companyWebsite)}</a>
-      </p>
+    <div style="border-top: 1px solid #e2e8f0; padding: 22px 36px; background: #f8fafc;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="vertical-align: top; width: 54px;">
+            ${
+              brandLogoPath
+                ? `<img src="cid:${brandLogoCid}" alt="${escapeHtml(config.companyName)}" style="width: 42px; height: 42px; display: block; border-radius: 8px;" />`
+                : ""
+            }
+          </td>
+          <td style="vertical-align: top;">
+            <p style="margin: 0; font-size: 14px; color: #0f172a; line-height: 1.7;">
+              <strong>With regards,</strong><br />
+              ${escapeHtml(config.companyName)} Outreach Team
+            </p>
+            <p style="margin: 8px 0 0; font-size: 13px; color: #64748b; line-height: 1.8;">
+              Phone / WhatsApp: ${escapeHtml(contactNumbersInline)}<br />
+              Email: ${escapeHtml(fromEmail)}<br />
+              Website: <a href="${escapeHtml(config.companyWebsite)}" target="_blank" rel="noreferrer" style="color: ${design.accent}; text-decoration: none;">${escapeHtml(config.companyWebsite)}</a>
+            </p>
+          </td>
+        </tr>
+      </table>
     </div>
 
   </div>
@@ -694,6 +878,8 @@ function renderClientLeadEmail({
           "",
         ]
       : []),
+    "With regards,",
+    `${config.companyName} Outreach Team`,
     "---",
     `${config.companyName}`,
     `${contactNumbersInline}  |  ${config.companyWebsite}`,
@@ -708,6 +894,19 @@ function renderClientLeadEmail({
         filename: path.basename(pitchDeckPath),
         content_type: "application/pdf",
         source_path: pitchDeckPath,
+      }),
+    );
+  }
+  if (brandLogoPath) {
+    attachments.push(
+      previewAttachment({
+        label: "Cogitation Works Logo",
+        filename: path.basename(brandLogoPath),
+        content_type: "image/png",
+        source_path: brandLogoPath,
+        cid: brandLogoCid,
+        content_disposition: "inline",
+        hidden_in_ui: true,
       }),
     );
   }
@@ -839,6 +1038,7 @@ async function sendClientLeadCampaign(
         subject: preview.subject,
         delivered: false,
         message: `Scheduled for ${validated.scheduled_for.toISOString()}`,
+        provider_message_id: null,
       });
     }
   } else {
@@ -859,6 +1059,7 @@ async function sendClientLeadCampaign(
         subject: preview.subject,
         delivered: delivery.delivered,
         message: delivery.message,
+        provider_message_id: delivery.provider_message_id || null,
       });
     }
   }
@@ -943,16 +1144,24 @@ async function sendClientLeadCampaign(
 
 async function listSentClientLeadCampaigns(
   db,
-  { ownerUserId = null, excludeOwnerUserId = null, limit = 40 } = {},
+  {
+    scopeQuery = null,
+    excludeCreatorRoles = [],
+    excludeCreatorNames = [],
+    includeReplySummary = true,
+    limit = 40,
+  } = {},
 ) {
-  const query = {
-    ...activeCampaignClause(),
-  };
-  if (ownerUserId) {
-    query.owner_user_id = ownerUserId;
-  } else if (excludeOwnerUserId) {
-    query.owner_user_id = { $ne: excludeOwnerUserId };
-  }
+  const query = buildQueryAnd([
+    activeCampaignClause(),
+    scopeQuery && typeof scopeQuery === "object" ? scopeQuery : null,
+    Array.isArray(excludeCreatorRoles) && excludeCreatorRoles.length > 0
+      ? { created_by_role: { $nin: excludeCreatorRoles } }
+      : null,
+    Array.isArray(excludeCreatorNames) && excludeCreatorNames.length > 0
+      ? { created_by: { $nin: excludeCreatorNames } }
+      : null,
+  ]);
 
   const records = await db
     .collection(LEAD_HISTORY_COLLECTION)
@@ -961,7 +1170,32 @@ async function listSentClientLeadCampaigns(
     .limit(limit)
     .toArray();
 
-  return records.map(publicSentRecord);
+  if (!includeReplySummary) {
+    return records.map((record) => ({
+      ...publicSentRecord(record),
+      reply_count: 0,
+      latest_reply_at: null,
+      client_replies: [],
+    }));
+  }
+
+  const replySummary = await summarizeClientRepliesForCampaigns(
+    db,
+    records.map((record) => record._id),
+    { limitPerCampaign: 5 },
+  );
+
+  return records.map((record) => {
+    const serialized = publicSentRecord(record);
+    const summary = replySummary.get(serialized.id);
+
+    return {
+      ...serialized,
+      reply_count: summary?.reply_count || 0,
+      latest_reply_at: summary?.latest_reply_at || null,
+      client_replies: summary?.client_replies || [],
+    };
+  });
 }
 
 async function getClientLeadHistorySections(db, actor) {
@@ -973,23 +1207,28 @@ async function getClientLeadHistorySections(db, actor) {
         "Campaigns sent by your own account. You can resend from here.",
       allow_resend: true,
       records: await listSentClientLeadCampaigns(db, {
-        ownerUserId: actor.id,
+        scopeQuery: buildSelfCampaignScope(actor),
+        includeReplySummary: true,
         limit: 60,
       }),
     },
   ];
 
-  if (actor.role === "super_admin" || actor.can_view_team_history) {
+  if (actor.role === "super_admin" || actor.can_view_other_sent_history) {
+    const isSuperAdmin = actor.role === "super_admin";
     sections.push({
       id: "others",
       title: "Others' Email History",
       description:
-        actor.role === "super_admin"
+        isSuperAdmin
           ? "Campaigns sent by other users. Super admins can review and resend these records."
-          : "Campaigns sent by other users. Visible because super admin granted access.",
-      allow_resend: actor.role === "super_admin",
+          : "Campaigns sent by other users, excluding super admin sends.",
+      allow_resend: isSuperAdmin,
       records: await listSentClientLeadCampaigns(db, {
-        excludeOwnerUserId: actor.id,
+        scopeQuery: buildOtherCampaignScope(actor),
+        excludeCreatorRoles: isSuperAdmin ? [] : ["super_admin"],
+        excludeCreatorNames: isSuperAdmin ? [] : buildSuperAdminNameMatchers(),
+        includeReplySummary: isSuperAdmin,
         limit: 60,
       }),
     });
@@ -998,16 +1237,127 @@ async function getClientLeadHistorySections(db, actor) {
   return { sections };
 }
 
-async function resendClientLeadCampaign(db, recordId, actor) {
-  const objectId = ensureObjectId(recordId, "Sent email record not found.");
-  const query =
-    actor.role === "super_admin"
-      ? { _id: objectId, ...activeCampaignClause() }
-      : { _id: objectId, owner_user_id: actor.id, ...activeCampaignClause() };
+function buildScheduledDeliveryResults(document, scheduledFor) {
+  return (document.emails || []).map((preview) => ({
+    recipient_name: preview.recipient_name,
+    recipient_email: preview.recipient_email,
+    subject: preview.subject,
+    delivered: false,
+    message: `Scheduled for ${scheduledFor.toISOString()}`,
+    provider_message_id: null,
+  }));
+}
+
+function cloneCampaignDocumentForResend(document, actor, scheduledFor) {
+  const now = new Date();
+  const nextId = new ObjectId();
+
+  return {
+    _id: nextId,
+    owner_user_id: actor.id,
+    content_type: document.content_type,
+    template_id: document.template_id,
+    template_title: document.template_title,
+    sender_mode: document.sender_mode,
+    custom_sender_email: document.custom_sender_email ?? null,
+    from_email: document.from_email,
+    delivery_mode: document.delivery_mode,
+    clients: Array.isArray(document.clients)
+      ? document.clients.map((client) => ({ ...client }))
+      : [],
+    technologies: Array.isArray(document.technologies)
+      ? [...document.technologies]
+      : [],
+    email_details_paragraph: document.email_details_paragraph ?? null,
+    personal_use_paragraph: document.personal_use_paragraph ?? null,
+    email_attachments: Array.isArray(document.email_attachments)
+      ? document.email_attachments.map((attachment) => ({ ...attachment }))
+      : [],
+    personal_attachments: Array.isArray(document.personal_attachments)
+      ? document.personal_attachments.map((attachment) => ({ ...attachment }))
+      : [],
+    emails: Array.isArray(document.emails)
+      ? document.emails.map((preview) => ({
+          ...preview,
+          attachments: Array.isArray(preview.attachments)
+            ? preview.attachments.map((attachment) => ({ ...attachment }))
+            : [],
+        }))
+      : [],
+    delivery_results: buildScheduledDeliveryResults(document, scheduledFor),
+    created_by: actor.full_name,
+    created_by_role: actor.role,
+    created_at: now,
+    deleted_at: null,
+    last_sent_at: scheduledFor,
+    resend_count: 0,
+    scheduled_for: scheduledFor,
+    dispatch_status: "scheduled",
+    reply_count: 0,
+    latest_reply_at: null,
+    client_replies: [],
+    resend_source_id: serializeId(document._id),
+  };
+}
+
+async function resendClientLeadCampaign(db, recordId, actor, payload = {}) {
+  const query = buildCampaignOwnershipQuery(recordId, actor);
 
   const document = await db.collection(LEAD_HISTORY_COLLECTION).findOne(query);
   if (!document) {
     throw createHttpError(404, "Sent email record not found.");
+  }
+
+  const requestedMode = normalizeOptionalText(payload?.dispatch_mode);
+  const scheduledForInput = normalizeOptionalText(payload?.scheduled_for);
+  const shouldSchedule =
+    requestedMode === "schedule" || Boolean(scheduledForInput);
+
+  if (shouldSchedule) {
+    if (document.sender_mode === "gmail") {
+      throw createHttpError(
+        409,
+        "Scheduled resend is not available for Gmail Direct. Create a new send from Workspace.",
+      );
+    }
+
+    if (!scheduledForInput) {
+      throw createHttpError(422, "Schedule date and time is required.");
+    }
+
+    const scheduledFor = new Date(scheduledForInput);
+    if (Number.isNaN(scheduledFor.getTime())) {
+      throw createHttpError(422, "Enter a valid schedule date and time.");
+    }
+    if (scheduledFor.getTime() <= Date.now()) {
+      throw createHttpError(422, "Schedule time must be in the future.");
+    }
+
+    const clonedDocument = cloneCampaignDocumentForResend(
+      document,
+      actor,
+      scheduledFor,
+    );
+    await db.collection(LEAD_HISTORY_COLLECTION).insertOne(clonedDocument);
+
+    await logAction(db, {
+      actorName: actor.full_name,
+      actorRole: actor.role,
+      action: "client_lead_resend_scheduled",
+      targetType: "lead_campaign",
+      targetId: serializeId(clonedDocument._id),
+      metadata: {
+        source_record_id: recordId,
+        template_id: clonedDocument.template_id,
+        client_count: (clonedDocument.clients || []).length,
+        scheduled_for: scheduledFor,
+      },
+    });
+
+    return {
+      message: `Campaign resend scheduled for ${scheduledFor.toLocaleString()}.`,
+      record: publicSentRecord(clonedDocument),
+    };
   }
 
   if (document.dispatch_status === "scheduled" && document.scheduled_for) {
@@ -1036,6 +1386,7 @@ async function resendClientLeadCampaign(db, recordId, actor) {
       subject: preview.subject,
       delivered: delivery.delivered,
       message: delivery.message,
+      provider_message_id: delivery.provider_message_id || null,
     });
   }
 
@@ -1093,6 +1444,7 @@ async function dispatchScheduledCampaignDocument(db, document) {
       subject: preview.subject,
       delivered: false,
       message: errorMessage,
+      provider_message_id: null,
     }));
 
     const now = new Date();
@@ -1131,6 +1483,7 @@ async function dispatchScheduledCampaignDocument(db, document) {
       subject: preview.subject,
       delivered: delivery.delivered,
       message: delivery.message,
+      provider_message_id: delivery.provider_message_id || null,
     });
   }
 
@@ -1175,14 +1528,30 @@ async function dispatchDueScheduledCampaigns(db, { batchSize = 10 } = {}) {
 
   for (let index = 0; index < batchSize; index += 1) {
     const now = new Date();
+    const staleBefore = new Date(now.getTime() - 10 * 60 * 1000);
     const claimed = await db
       .collection(LEAD_HISTORY_COLLECTION)
       .findOneAndUpdate(
-        {
-          dispatch_status: "scheduled",
-          scheduled_for: { $lte: now },
-          ...activeCampaignClause(),
-        },
+        buildQueryAnd([
+          {
+            $or: [
+              {
+                dispatch_status: "scheduled",
+                scheduled_for: { $lte: now },
+              },
+              {
+                dispatch_status: "sending",
+                scheduled_for: { $lte: now },
+                $or: [
+                  { scheduled_claimed_at: { $lte: staleBefore } },
+                  { scheduled_claimed_at: { $exists: false } },
+                  { scheduled_claimed_at: null },
+                ],
+              },
+            ],
+          },
+          activeCampaignClause(),
+        ]),
         {
           $set: {
             dispatch_status: "sending",
@@ -1195,7 +1564,7 @@ async function dispatchDueScheduledCampaigns(db, { batchSize = 10 } = {}) {
         },
       );
 
-    const document = claimed?.value;
+    const document = unwrapFindOneAndUpdateResult(claimed);
     if (!document) {
       break;
     }
@@ -1227,7 +1596,11 @@ function buildCampaignOwnershipQuery(recordId, actor) {
   if (actor.role === "super_admin") {
     return { _id: objectId, ...activeCampaignClause() };
   }
-  return { _id: objectId, owner_user_id: actor.id, ...activeCampaignClause() };
+  return buildQueryAnd([
+    { _id: objectId },
+    activeCampaignClause(),
+    buildSelfCampaignScope(actor),
+  ]);
 }
 
 async function getClientLeadAttachmentForDownload(
@@ -1286,15 +1659,27 @@ async function getClientLeadAttachmentForDownload(
 }
 
 async function deleteClientLeadCampaign(db, recordId, actor) {
-  if (actor.role !== "super_admin") {
-    throw createHttpError(403, "Only super admin can delete sent campaigns.");
+  const objectId = ensureObjectId(recordId, "Sent email record not found.");
+  let query;
+  if (actor.role === "super_admin") {
+    query = {
+      _id: objectId,
+      ...activeCampaignClause(),
+    };
+  } else if (actor.can_view_other_sent_history) {
+    query = buildQueryAnd([
+      { _id: objectId },
+      activeCampaignClause(),
+      { created_by_role: { $ne: "super_admin" } },
+      ...buildSuperAdminNameMatchers().map((matcher) => ({
+        created_by: { $not: matcher },
+      })),
+    ]);
+  } else {
+    query = buildCampaignOwnershipQuery(recordId, actor);
   }
 
-  const objectId = ensureObjectId(recordId, "Sent email record not found.");
-  const current = await db.collection(LEAD_HISTORY_COLLECTION).findOne({
-    _id: objectId,
-    ...activeCampaignClause(),
-  });
+  const current = await db.collection(LEAD_HISTORY_COLLECTION).findOne(query);
   if (!current) {
     throw createHttpError(404, "Sent email record not found.");
   }

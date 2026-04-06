@@ -6,7 +6,7 @@ const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const multer = require("multer");
 
-const { config } = require("./src/config");
+const { config, toBoolean } = require("./src/config");
 const { connectDatabase } = require("./src/db");
 const {
   asyncHandler,
@@ -52,6 +52,18 @@ const {
   processDueScheduledEmails,
 } = require("./src/services/scheduledEmails");
 const {
+  ensureLeadReplyIndexes,
+  getClientReplyAttachmentForDownload,
+  listClientReplyHistorySections,
+  listClientReplyNotifications,
+  markClientReplyNotificationsAsRead,
+  syncClientRepliesFromImap,
+} = require("./src/services/replies");
+const {
+  buildExportFile,
+  getExportManifest,
+} = require("./src/services/exports");
+const {
   confirmEmailChange,
   ensureAuthIndexes,
   resetPasswordWithChallenge,
@@ -96,15 +108,123 @@ const ready = (async () => {
   await ensureUserIndexes(database);
   await ensureAuthIndexes(database);
   await ensureLeadIndexes(database);
+  await ensureLeadReplyIndexes(database);
   await ensureScheduledEmailIndexes(database);
   await ensureSuperAdmin(database);
 })();
+
+const schedulerRuntime = {
+  enabled: false,
+  started: false,
+  inFlight: false,
+  timer: null,
+  intervalSeconds: null,
+  lastStartedAt: null,
+  lastCompletedAt: null,
+  lastSuccessAt: null,
+  lastDurationMs: null,
+  lastResult: null,
+  lastError: null,
+};
 
 function getDb() {
   if (!database) {
     throw createHttpError(503, "Database is not connected.");
   }
   return database;
+}
+
+async function runInternalSchedulerTick() {
+  if (schedulerRuntime.inFlight) {
+    return;
+  }
+
+  schedulerRuntime.inFlight = true;
+  schedulerRuntime.lastStartedAt = new Date();
+  try {
+    await ready;
+    const batchSize = 25;
+    const campaignProcessed = await dispatchDueScheduledCampaigns(getDb(), {
+      batchSize,
+    });
+    const emailResult = await processDueScheduledEmails(getDb(), { batchSize });
+    schedulerRuntime.lastCompletedAt = new Date();
+    schedulerRuntime.lastSuccessAt = schedulerRuntime.lastCompletedAt;
+    schedulerRuntime.lastDurationMs =
+      schedulerRuntime.lastCompletedAt.getTime() -
+      schedulerRuntime.lastStartedAt.getTime();
+    schedulerRuntime.lastResult = {
+      campaignProcessed,
+      emailProcessed: emailResult?.processed ?? 0,
+      emailSent: emailResult?.sent ?? 0,
+      emailFailed: emailResult?.failed ?? 0,
+    };
+    schedulerRuntime.lastError = null;
+  } catch (error) {
+    schedulerRuntime.lastCompletedAt = new Date();
+    schedulerRuntime.lastDurationMs =
+      schedulerRuntime.lastStartedAt &&
+      schedulerRuntime.lastCompletedAt
+        ? schedulerRuntime.lastCompletedAt.getTime() -
+          schedulerRuntime.lastStartedAt.getTime()
+        : null;
+    schedulerRuntime.lastError =
+      error instanceof Error ? error.message : "Scheduler tick failed.";
+    console.error("[scheduler] Internal scheduler tick failed:", error);
+  } finally {
+    schedulerRuntime.inFlight = false;
+  }
+}
+
+function startInternalSchedulerLoop() {
+  if (schedulerRuntime.started) {
+    return;
+  }
+
+  const enabled = toBoolean(process.env.INTERNAL_SCHEDULER_ENABLED, true);
+  schedulerRuntime.enabled = enabled;
+  if (!enabled) {
+    return;
+  }
+
+  const configuredIntervalSeconds = Number.parseInt(
+    String(process.env.INTERNAL_SCHEDULER_INTERVAL_SECONDS || "30"),
+    10,
+  );
+  const intervalSeconds = Number.isFinite(configuredIntervalSeconds)
+    ? Math.max(15, Math.min(configuredIntervalSeconds, 300))
+    : 30;
+  schedulerRuntime.intervalSeconds = intervalSeconds;
+
+  schedulerRuntime.started = true;
+  schedulerRuntime.timer = setInterval(() => {
+    void runInternalSchedulerTick();
+  }, intervalSeconds * 1000);
+
+  if (typeof schedulerRuntime.timer?.unref === "function") {
+    schedulerRuntime.timer.unref();
+  }
+
+  setTimeout(() => {
+    void runInternalSchedulerTick();
+  }, 5000);
+}
+
+startInternalSchedulerLoop();
+
+function serializeSchedulerStatus() {
+  return {
+    enabled: schedulerRuntime.enabled,
+    started: schedulerRuntime.started,
+    in_flight: schedulerRuntime.inFlight,
+    interval_seconds: schedulerRuntime.intervalSeconds,
+    last_started_at: schedulerRuntime.lastStartedAt,
+    last_completed_at: schedulerRuntime.lastCompletedAt,
+    last_success_at: schedulerRuntime.lastSuccessAt,
+    last_duration_ms: schedulerRuntime.lastDurationMs,
+    last_result: schedulerRuntime.lastResult,
+    last_error: schedulerRuntime.lastError,
+  };
 }
 
 function isPasswordChangeAllowedPath(pathname) {
@@ -382,6 +502,34 @@ app.get(
 );
 
 app.get(
+  `${config.apiPrefix}/admin/exports/manifest`,
+  asyncHandler(async (req, res) => {
+    await requireRole(getDb(), req, ["super_admin"]);
+    res.json({ datasets: getExportManifest() });
+  }),
+);
+
+app.get(
+  `${config.apiPrefix}/admin/exports/download`,
+  asyncHandler(async (req, res) => {
+    await requireRole(getDb(), req, ["super_admin"]);
+
+    const file = await buildExportFile(getDb(), {
+      dataset: req.query.dataset,
+      format: req.query.format,
+      record_id: req.query.record_id,
+    });
+
+    res.setHeader("Content-Type", file.contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${String(file.filename || "export.dat").replace(/\"/g, "'")}"`,
+    );
+    res.send(file.body);
+  }),
+);
+
+app.get(
   `${config.apiPrefix}/leads/client-lead/templates`,
   asyncHandler(async (req, res) => {
     await requireRole(getDb(), req, ["super_admin", "user"]);
@@ -447,6 +595,102 @@ app.get(
 );
 
 app.get(
+  `${config.apiPrefix}/leads/client-lead/replies/notifications`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+
+    const response = await listClientReplyNotifications(getDb(), currentUser, {
+      limit: 20,
+    });
+    res.json(response);
+  }),
+);
+
+app.get(
+  `${config.apiPrefix}/leads/client-lead/replies/history`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+
+    const response = await listClientReplyHistorySections(getDb(), currentUser);
+    res.json(response);
+  }),
+);
+
+app.post(
+  `${config.apiPrefix}/leads/client-lead/replies/notifications/read`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((value) => typeof value === "string")
+      : [];
+    const response = await markClientReplyNotificationsAsRead(
+      getDb(),
+      currentUser,
+      ids,
+    );
+    res.json(response);
+  }),
+);
+
+app.post(
+  `${config.apiPrefix}/leads/client-lead/replies/sync`,
+  asyncHandler(async (req, res) => {
+    await requireRole(getDb(), req, ["super_admin", "user"]);
+    const result = await syncClientRepliesFromImap(getDb(), { force: true });
+    res.json({
+      message: "Client reply sync completed.",
+      result,
+    });
+  }),
+);
+
+app.get(
+  `${config.apiPrefix}/leads/client-lead/replies/:replyId/attachments/:filename`,
+  asyncHandler(async (req, res) => {
+    const currentUser = await requireRole(getDb(), req, [
+      "super_admin",
+      "user",
+    ]);
+
+    const attachment = await getClientReplyAttachmentForDownload(
+      getDb(),
+      req.params.replyId,
+      currentUser,
+      decodeURIComponent(req.params.filename || ""),
+    );
+
+    const sourcePath = path.resolve(attachment.source_path);
+    if (!fs.existsSync(sourcePath)) {
+      throw createHttpError(404, "Reply attachment file not found.");
+    }
+
+    const fileBuffer = sourcePath.endsWith(".gz")
+      ? zlib.gunzipSync(fs.readFileSync(sourcePath))
+      : fs.readFileSync(sourcePath);
+
+    const safeFileName = String(attachment.filename || "attachment")
+      .replace(/\"/g, "'")
+      .trim();
+    res.setHeader("Content-Type", attachment.content_type);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${safeFileName || "attachment"}"`,
+    );
+    res.send(fileBuffer);
+  }),
+);
+
+app.get(
   `${config.apiPrefix}/leads/client-lead/sent/:recordId/attachments/:category/:filename`,
   asyncHandler(async (req, res) => {
     const currentUser = await requireRole(getDb(), req, [
@@ -494,6 +738,7 @@ app.post(
       getDb(),
       req.params.recordId,
       currentUser,
+      req.body || {},
     );
     res.json(response);
   }),
@@ -577,6 +822,16 @@ app.post(
   }),
 );
 
+app.get(
+  `${config.apiPrefix}/scheduler/status`,
+  asyncHandler(async (req, res) => {
+    await requireRole(getDb(), req, ["super_admin", "user"]);
+    res.json({
+      status: serializeSchedulerStatus(),
+    });
+  }),
+);
+
 app.post(
   `${config.apiPrefix}/scheduler/process`,
   asyncHandler(async (req, res) => {
@@ -602,6 +857,9 @@ app.post(
     const emailResult = await processDueScheduledEmails(getDb(), {
       batchSize: safeBatchSize,
     });
+    const replySyncResult = await syncClientRepliesFromImap(getDb(), {
+      force: true,
+    });
 
     res.json({
       message: "Scheduler processing completed.",
@@ -609,6 +867,7 @@ app.post(
         processed: campaignProcessed,
       },
       email_dispatch: emailResult,
+      reply_sync: replySyncResult,
     });
   }),
 );

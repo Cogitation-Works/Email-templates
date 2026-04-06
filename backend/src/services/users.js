@@ -22,14 +22,19 @@ const {
 const USERS_COLLECTION = "users";
 
 function serializeUser(document) {
+  const legacyHistoryAccess =
+    document.can_view_team_history ?? document.role === "super_admin";
+
   return {
     id: serializeId(document._id),
     full_name: document.full_name,
     email: document.email,
     phone: document.phone ?? null,
     role: document.role,
-    can_view_team_history:
-      document.can_view_team_history ?? document.role === "super_admin",
+    can_view_other_sent_history:
+      document.can_view_other_sent_history ?? legacyHistoryAccess,
+    can_view_other_client_replies:
+      document.can_view_other_client_replies ?? legacyHistoryAccess,
     can_use_sales_sender:
       document.can_use_sales_sender ?? document.role === "super_admin",
     can_use_admin_sender:
@@ -68,6 +73,8 @@ async function ensureSuperAdmin(db) {
       role: "super_admin",
       hashed_password: await hashPassword(config.superAdminPassword),
       can_view_team_history: true,
+      can_view_other_sent_history: true,
+      can_view_other_client_replies: true,
       can_use_sales_sender: true,
       can_use_admin_sender: true,
       created_at: now,
@@ -88,6 +95,8 @@ async function ensureSuperAdmin(db) {
         phone: config.companyPhone,
         role: "super_admin",
         can_view_team_history: true,
+        can_view_other_sent_history: true,
+        can_view_other_client_replies: true,
         can_use_sales_sender: true,
         can_use_admin_sender: true,
         updated_at: now,
@@ -260,7 +269,10 @@ function validateManagedUserPayload(payload, { allowPassword = false } = {}) {
     full_name: fullName,
     email,
     phone,
-    can_view_team_history: Boolean(payload.can_view_team_history),
+    can_view_other_sent_history: Boolean(payload.can_view_other_sent_history),
+    can_view_other_client_replies: Boolean(
+      payload.can_view_other_client_replies,
+    ),
     can_use_sales_sender: Boolean(payload.can_use_sales_sender),
     can_use_admin_sender: Boolean(payload.can_use_admin_sender),
     new_password: allowPassword ? newPassword : null,
@@ -281,7 +293,12 @@ async function createManagedUser(db, payload, actor) {
     email: validated.email,
     phone: validated.phone,
     role: "user",
-    can_view_team_history: validated.can_view_team_history,
+    can_view_team_history:
+      validated.can_view_other_sent_history ||
+      validated.can_view_other_client_replies,
+    can_view_other_sent_history: validated.can_view_other_sent_history,
+    can_view_other_client_replies:
+      validated.can_view_other_client_replies,
     can_use_sales_sender: validated.can_use_sales_sender,
     can_use_admin_sender: validated.can_use_admin_sender,
     hashed_password: await hashPassword(rawPassword),
@@ -311,7 +328,9 @@ async function createManagedUser(db, payload, actor) {
       email: validated.email,
       delivery_mode: config.emailDeliveryMode,
       delivery_message: deliveryStatus.message,
-      can_view_team_history: validated.can_view_team_history,
+      can_view_other_sent_history: validated.can_view_other_sent_history,
+      can_view_other_client_replies:
+        validated.can_view_other_client_replies,
       can_use_sales_sender: validated.can_use_sales_sender,
       can_use_admin_sender: validated.can_use_admin_sender,
     },
@@ -354,7 +373,12 @@ async function updateManagedUser(db, userId, payload, actor) {
     full_name: validated.full_name,
     email: validated.email,
     phone: validated.phone,
-    can_view_team_history: validated.can_view_team_history,
+    can_view_team_history:
+      validated.can_view_other_sent_history ||
+      validated.can_view_other_client_replies,
+    can_view_other_sent_history: validated.can_view_other_sent_history,
+    can_view_other_client_replies:
+      validated.can_view_other_client_replies,
     can_use_sales_sender: validated.can_use_sales_sender,
     can_use_admin_sender: validated.can_use_admin_sender,
     updated_at: new Date(),
@@ -378,7 +402,9 @@ async function updateManagedUser(db, userId, payload, actor) {
     targetId: userId,
     metadata: {
       email: validated.email,
-      can_view_team_history: validated.can_view_team_history,
+      can_view_other_sent_history: validated.can_view_other_sent_history,
+      can_view_other_client_replies:
+        validated.can_view_other_client_replies,
       can_use_sales_sender: validated.can_use_sales_sender,
       can_use_admin_sender: validated.can_use_admin_sender,
       password_updated: Boolean(validated.new_password),

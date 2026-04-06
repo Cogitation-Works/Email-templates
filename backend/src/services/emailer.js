@@ -27,6 +27,9 @@ function previewAttachment({
   size_bytes = null,
   compressed_size_bytes = null,
   source_path = null,
+  cid = null,
+  content_disposition = null,
+  hidden_in_ui = false,
 }) {
   return {
     label,
@@ -35,6 +38,9 @@ function previewAttachment({
     size_bytes,
     compressed_size_bytes,
     source_path,
+    cid,
+    content_disposition,
+    hidden_in_ui,
   };
 }
 
@@ -257,6 +263,7 @@ async function deliverEmail(preview, options = {}) {
       delivered: true,
       message:
         "Email prepared in log mode. SMTP delivery is disabled in this environment.",
+      provider_message_id: null,
     };
   }
 
@@ -283,6 +290,7 @@ async function deliverEmail(preview, options = {}) {
     return {
       delivered: false,
       message: "SMTP mode is enabled but the SMTP credentials are incomplete.",
+      provider_message_id: null,
     };
   }
 
@@ -310,6 +318,7 @@ async function deliverEmail(preview, options = {}) {
       return {
         delivered: false,
         message: `Attachment not found: ${attachment.filename}`,
+        provider_message_id: null,
       };
     }
     if (sourcePath.endsWith(".gz")) {
@@ -319,12 +328,16 @@ async function deliverEmail(preview, options = {}) {
         filename: attachment.filename,
         content,
         contentType: attachment.content_type,
+        cid: attachment.cid || undefined,
+        contentDisposition: attachment.content_disposition || undefined,
       });
     } else {
       attachments.push({
         filename: attachment.filename,
         path: sourcePath,
         contentType: attachment.content_type,
+        cid: attachment.cid || undefined,
+        contentDisposition: attachment.content_disposition || undefined,
       });
     }
   }
@@ -341,7 +354,7 @@ async function deliverEmail(preview, options = {}) {
       requireTLS: account.starttls,
     });
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `${preview.from_name} <${fromAddress}>`,
       replyTo: replyToAddress,
       to: preview.recipient_email,
@@ -351,9 +364,16 @@ async function deliverEmail(preview, options = {}) {
       attachments,
     });
 
+    const providerMessageId = String(info?.messageId || "")
+      .trim()
+      .replace(/^<+/, "")
+      .replace(/>+$/, "")
+      .toLowerCase();
+
     return {
       delivered: true,
       message: `Email delivered successfully using the ${account.key} SMTP account.`,
+      provider_message_id: providerMessageId || null,
     };
   } catch (error) {
     const message =
@@ -363,6 +383,7 @@ async function deliverEmail(preview, options = {}) {
     return {
       delivered: false,
       message: `SMTP delivery failed: ${message}`,
+      provider_message_id: null,
     };
   }
 }

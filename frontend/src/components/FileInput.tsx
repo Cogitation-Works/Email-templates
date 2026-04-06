@@ -22,7 +22,7 @@ export function FileInput({
             </p>
           ) : null}
         </div>
-        <label className="file-input-add inline-flex cursor-pointer items-center gap-2 rounded-full border border-dashed border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--text)] transition hover:border-[rgba(var(--accent-rgb),0.42)]">
+        <label className="file-input-add inline-flex min-w-[9.5rem] cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border border-dashed border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--text)] transition hover:border-[rgba(var(--accent-rgb),0.42)]">
           <Paperclip className="h-4 w-4 text-[var(--accent)]" />
           <span>Add files</span>
           <input

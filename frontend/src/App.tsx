@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "./context/AuthContext";
 import { AdminPage } from "./pages/AdminPage";
+import { ExportsPage } from "./pages/ExportsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { LogsPage } from "./pages/LogsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -113,6 +114,14 @@ export default function App() {
           </ProtectedRoute>
         }
         path="/admin"
+      />
+      <Route
+        element={
+          <ProtectedRoute roles={["super_admin"]}>
+            <ExportsPage />
+          </ProtectedRoute>
+        }
+        path="/exports"
       />
       <Route
         element={

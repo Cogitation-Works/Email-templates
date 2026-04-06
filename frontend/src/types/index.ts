@@ -8,7 +8,8 @@ export interface User {
   email: string;
   phone?: string | null;
   role: Role;
-  can_view_team_history: boolean;
+  can_view_other_sent_history: boolean;
+  can_view_other_client_replies: boolean;
   can_use_sales_sender: boolean;
   can_use_admin_sender: boolean;
   created_at: string;
@@ -141,6 +142,33 @@ export interface LeadDeliveryResult {
   subject: string;
   delivered: boolean;
   message: string;
+  provider_message_id?: string | null;
+}
+
+export interface LeadClientReply {
+  id: string;
+  campaign_id?: string | null;
+  campaign_template_title: string;
+  campaign_created_by: string;
+  campaign_created_by_role?: string;
+  campaign_sender_mode?: LeadSenderMode | "";
+  campaign_from_email?: string;
+  campaign_to_email?: string;
+  client_name: string;
+  client_email: string;
+  from_name: string;
+  from_email: string;
+  to_name?: string;
+  to_email?: string;
+  mailbox_user?: string;
+  message_kind?: "reply" | "inbox";
+  subject: string;
+  preview_text: string;
+  body_text: string;
+  body_html?: string | null;
+  attachments?: EmailAttachment[];
+  received_at: string;
+  unread?: boolean;
 }
 
 export interface SentLeadRecord {
@@ -171,6 +199,42 @@ export interface SentLeadRecord {
   resend_count: number;
   scheduled_for?: string | null;
   dispatch_status?: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+  reply_count?: number;
+  latest_reply_at?: string | null;
+  client_replies?: LeadClientReply[];
+}
+
+export interface LeadLinkedCampaignDetail {
+  id: string;
+  template_id: string;
+  template_title: string;
+  sender_mode: LeadSenderMode;
+  custom_sender_email?: string | null;
+  from_email: string;
+  delivery_mode: "single" | "multiple";
+  clients: Array<{
+    name: string;
+    email: string;
+    phone?: string | null;
+  }>;
+  technologies?: string[];
+  email_details_paragraph?: string | null;
+  personal_use_paragraph?: string | null;
+  email_attachments: EmailAttachment[];
+  personal_attachments: EmailAttachment[];
+  emails: EmailPreview[];
+  delivery_results: LeadDeliveryResult[];
+  created_by: string;
+  created_by_role: string;
+  created_at: string;
+  last_sent_at: string;
+  resend_count: number;
+  scheduled_for?: string | null;
+  dispatch_status?: "scheduled" | "sending" | "sent" | "failed" | "cancelled";
+}
+
+export interface LeadReplyHistoryRecord extends LeadClientReply {
+  linked_campaign?: LeadLinkedCampaignDetail | null;
 }
 
 export interface LeadSendResponse {
@@ -190,11 +254,84 @@ export interface LeadHistoryResponse {
   sections: LeadHistorySection[];
 }
 
+export interface SchedulerStatus {
+  enabled: boolean;
+  started: boolean;
+  in_flight: boolean;
+  interval_seconds?: number | null;
+  last_started_at?: string | null;
+  last_completed_at?: string | null;
+  last_success_at?: string | null;
+  last_duration_ms?: number | null;
+  last_result?: {
+    campaignProcessed?: number;
+    emailProcessed?: number;
+    emailSent?: number;
+    emailFailed?: number;
+  } | null;
+  last_error?: string | null;
+}
+
+export interface SchedulerStatusResponse {
+  status: SchedulerStatus;
+}
+
+export interface LeadReplyHistorySection {
+  id: string;
+  title: string;
+  description: string;
+  records: LeadReplyHistoryRecord[];
+}
+
+export interface LeadReplyHistoryResponse {
+  sections: LeadReplyHistorySection[];
+}
+
+export interface ClientReplyNotification {
+  id: string;
+  campaign_id: string;
+  campaign_template_title: string;
+  campaign_created_by: string;
+  campaign_from_email?: string;
+  campaign_to_email?: string;
+  client_name: string;
+  client_email: string;
+  from_name: string;
+  from_email: string;
+  to_name?: string;
+  to_email?: string;
+  subject: string;
+  preview_text: string;
+  body_text: string;
+  body_html?: string | null;
+  attachments?: EmailAttachment[];
+  received_at: string;
+  unread: boolean;
+}
+
+export interface ClientReplyNotificationsResponse {
+  unread_count: number;
+  notifications: ClientReplyNotification[];
+}
+
+export interface ExportDatasetOption {
+  id: string;
+  label: string;
+  description: string;
+  supportsRecordId: boolean;
+  formats: Array<"json" | "csv">;
+}
+
+export interface ExportManifestResponse {
+  datasets: ExportDatasetOption[];
+}
+
 export interface CreateUserPayload {
   full_name: string;
   email: string;
   phone?: string;
-  can_view_team_history: boolean;
+  can_view_other_sent_history: boolean;
+  can_view_other_client_replies: boolean;
   can_use_sales_sender: boolean;
   can_use_admin_sender: boolean;
 }

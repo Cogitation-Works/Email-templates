@@ -1,7 +1,11 @@
 const jwt = require("jsonwebtoken");
 
 const { config } = require("../config");
-const { getUserById, serializeUser } = require("../services/users");
+const {
+  getUserByEmail,
+  getUserById,
+  serializeUser,
+} = require("../services/users");
 const { createHttpError } = require("../utils");
 
 function createAccessToken(user, rememberMe) {
@@ -46,6 +50,12 @@ async function authenticateRequest(db, req) {
 
   const user = await getUserById(db, payload.sub);
   if (!user) {
+    if (payload.role === "super_admin" && config.superAdminEmail) {
+      const fallback = await getUserByEmail(db, config.superAdminEmail);
+      if (fallback) {
+        return serializeUser(fallback);
+      }
+    }
     throw createHttpError(401, "User not found.");
   }
 

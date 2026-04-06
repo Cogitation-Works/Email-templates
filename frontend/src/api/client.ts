@@ -1,10 +1,13 @@
 import type {
   AuditLog,
   AuthResponse,
+  ClientReplyNotificationsResponse,
   CreateUserPayload,
   EmailChangeStartResponse,
+  ExportManifestResponse,
   ForgotPasswordStartResponse,
   LeadHistoryResponse,
+  LeadReplyHistoryResponse,
   LeadPreviewPayload,
   LeadPreviewResponse,
   LeadSendPayload,
@@ -13,6 +16,7 @@ import type {
   ManagedUserCreateResponse,
   ManagedUserPasswordResetResponse,
   ManagedUserUpdateResponse,
+  SchedulerStatusResponse,
   TemplateVariant,
   UpdateUserPayload,
   User,
@@ -29,6 +33,10 @@ export class ApiError extends Error {
   }
 }
 
+function buildApiUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -40,7 +48,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     headers,
     credentials: "include",
@@ -182,6 +190,50 @@ export const api = {
       method: "DELETE",
     }),
   listLogs: () => request<AuditLog[]>("/admin/logs"),
+  listExportManifest: () =>
+    request<ExportManifestResponse>("/admin/exports/manifest"),
+  downloadAdminExport: async (params: {
+    dataset: string;
+    format: "json" | "csv";
+    record_id?: string;
+  }) => {
+    const search = new URLSearchParams({
+      dataset: params.dataset,
+      format: params.format,
+    });
+    if (params.record_id?.trim()) {
+      search.set("record_id", params.record_id.trim());
+    }
+
+    const response = await fetch(
+      buildApiUrl(`/admin/exports/download?${search.toString()}`),
+      {
+        credentials: "include",
+      },
+    );
+
+    if (!response.ok) {
+      let message = "Unable to export data.";
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (typeof payload?.detail === "string" && payload.detail.trim()) {
+          message = payload.detail;
+        }
+      } catch {
+        message = response.statusText || message;
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const filenameMatch = disposition.match(/filename="([^"]+)"/i);
+
+    return {
+      blob,
+      filename: filenameMatch?.[1] || `${params.dataset}.${params.format}`,
+    };
+  },
   listClientLeadTemplates: () =>
     request<{ content_type: string; variants: TemplateVariant[] }>(
       "/leads/client-lead/templates",
@@ -212,9 +264,33 @@ export const api = {
   },
   listLeadHistorySections: () =>
     request<LeadHistoryResponse>("/leads/client-lead/history"),
-  resendClientLeadEmail: (recordId: string) =>
+  getSchedulerStatus: () =>
+    request<SchedulerStatusResponse>("/scheduler/status"),
+  listClientReplyHistorySections: () =>
+    request<LeadReplyHistoryResponse>("/leads/client-lead/replies/history"),
+  listClientReplyNotifications: () =>
+    request<ClientReplyNotificationsResponse>(
+      "/leads/client-lead/replies/notifications",
+    ),
+  markClientReplyNotificationsRead: (ids?: string[]) =>
+    request<{ updated: number }>("/leads/client-lead/replies/notifications/read", {
+      method: "POST",
+      body: JSON.stringify({ ids: ids ?? [] }),
+    }),
+  syncClientReplies: () =>
+    request<{ message: string; result: Record<string, unknown> }>(
+      "/leads/client-lead/replies/sync",
+      {
+        method: "POST",
+      },
+    ),
+  resendClientLeadEmail: (
+    recordId: string,
+    payload?: { dispatch_mode?: "now" | "schedule"; scheduled_for?: string },
+  ) =>
     request<LeadSendResponse>(`/leads/client-lead/sent/${recordId}/resend`, {
       method: "POST",
+      body: payload ? JSON.stringify(payload) : undefined,
     }),
   cancelScheduledClientLeadEmail: (recordId: string) =>
     request<LeadSendResponse>(

@@ -2,7 +2,6 @@ import { motion } from "framer-motion";
 import {
   BriefcaseBusiness,
   CheckCircle2,
-  Clock3,
   CircleHelp,
   Mail,
   Paperclip,
@@ -20,8 +19,13 @@ import {
   type ActionToastState,
 } from "../components/ActionToast";
 import { AppShell } from "../components/AppShell";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { Field } from "../components/Field";
 import { FileInput } from "../components/FileInput";
+import {
+  formatScheduledDateTime,
+  SchedulePicker,
+} from "../components/SchedulePicker";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
 import { cn } from "../lib/utils";
@@ -33,6 +37,10 @@ import type {
 
 function blankClient() {
   return { name: "", email: "", phone: "" };
+}
+
+function normalizeEmail(value: string) {
+  return String(value || "").trim().toLowerCase();
 }
 
 const DEFAULT_OUTGOING_ATTACHMENTS_ENABLED_KEY =
@@ -149,10 +157,13 @@ export function WorkspacePage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState<ActionToastState | null>(null);
+  const [pendingDuplicateRecipients, setPendingDuplicateRecipients] = useState<
+    string[] | null
+  >(null);
   const [previewViewport, setPreviewViewport] = useState<"mobile" | "tab">(
     "tab",
   );
-  const scheduleInputRef = useRef<HTMLInputElement | null>(null);
+  const clientEmailInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   useEffect(() => {
     if (!toast) {
@@ -168,25 +179,6 @@ export function WorkspacePage() {
 
   const showToast = (kind: ActionToastState["kind"], toastMessage: string) => {
     setToast({ id: Date.now(), kind, message: toastMessage });
-  };
-
-  const openSchedulePicker = () => {
-    const input = scheduleInputRef.current;
-    if (!input) {
-      return;
-    }
-
-    const pickerInput = input as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-
-    if (typeof pickerInput.showPicker === "function") {
-      pickerInput.showPicker();
-      return;
-    }
-
-    input.focus();
-    input.click();
   };
 
   useEffect(() => {
@@ -263,9 +255,12 @@ export function WorkspacePage() {
       try {
         setBusyAction("loading");
         const catalog = await api.listClientLeadTemplates();
-        setTemplates(catalog.variants);
+        const safeVariants = Array.isArray(catalog?.variants)
+          ? catalog.variants
+          : [];
+        setTemplates(safeVariants);
         setSelectedTemplateId(
-          (current) => current || catalog.variants[0]?.id || "",
+          (current) => current || safeVariants[0]?.id || "",
         );
       } catch (err) {
         const message =
@@ -327,6 +322,29 @@ export function WorkspacePage() {
       setSenderMode("gmail");
     }
   }, [senderMode, senderOptions]);
+
+  useEffect(() => {
+    if (senderMode === "gmail") {
+      setGmailAddress("");
+      setGmailAppPassword("");
+      setScheduledFor("");
+
+      // Some browsers/password managers autofill after initial paint.
+      const timeoutA = window.setTimeout(() => {
+        setGmailAddress("");
+        setGmailAppPassword("");
+      }, 60);
+      const timeoutB = window.setTimeout(() => {
+        setGmailAddress("");
+        setGmailAppPassword("");
+      }, 300);
+
+      return () => {
+        window.clearTimeout(timeoutA);
+        window.clearTimeout(timeoutB);
+      };
+    }
+  }, [senderMode]);
 
   const combinedOutgoingAttachments = useMemo(() => {
     const attachments = defaultOutgoingAttachmentsEnabled
@@ -395,7 +413,9 @@ export function WorkspacePage() {
     ) ?? previewVariants[0];
   const previewEmail = activeVariant?.previews[0];
   const previewViewportClass =
-    previewViewport === "mobile" ? "max-w-[390px]" : "w-full max-w-none";
+    previewViewport === "mobile" ? "max-w-[390px]" : "w-full max-w-[720px]";
+  const previewViewportFrameClass =
+    previewViewport === "mobile" ? "max-h-[36rem] p-4" : "max-h-[52rem] p-0";
 
   const validateBeforeSubmit = () => {
     if (senderMode === "gmail" && !gmailAddress.trim()) {
@@ -448,15 +468,60 @@ export function WorkspacePage() {
     }
   };
 
-  const handleSend = async () => {
-    try {
-      validateBeforeSubmit();
-      if (!selectedTemplateId) {
-        throw new Error("Select a template before dispatching the email.");
-      }
+  const focusClientEmail = (email: string) => {
+    const normalizedTarget = normalizeEmail(email);
+    const clientIndex = clients.findIndex(
+      (client) => normalizeEmail(client.email) === normalizedTarget,
+    );
+    if (clientIndex < 0) {
+      return;
+    }
 
+    const emailInput = clientEmailInputRefs.current[clientIndex];
+    if (!emailInput) {
+      return;
+    }
+
+    emailInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => {
+      emailInput.focus({ preventScroll: true });
+    }, 320);
+  };
+
+  const findDuplicateRecipientEmails = async () => {
+    const currentRecipients = [...new Set(
+      previewPayload.clients
+        .map((client) => normalizeEmail(client.email))
+        .filter(Boolean),
+    )];
+    if (!currentRecipients.length) {
+      return [];
+    }
+
+    const history = await api.listLeadHistorySections();
+    const alreadySentRecipients = new Set<string>();
+
+    for (const section of history.sections || []) {
+      for (const record of section.records || []) {
+        for (const recipient of record.clients || []) {
+          const recipientEmail = normalizeEmail(recipient.email);
+          if (recipientEmail) {
+            alreadySentRecipients.add(recipientEmail);
+          }
+        }
+      }
+    }
+
+    return currentRecipients.filter((email) =>
+      alreadySentRecipients.has(email),
+    );
+  };
+
+  const executeSend = async () => {
+    try {
       setBusyAction("send");
       setError("");
+      setMessage("");
       const response = await api.sendClientLeadEmails(
         {
           ...previewPayload,
@@ -482,13 +547,50 @@ export function WorkspacePage() {
       setPreviewViewport("tab");
       setMessage(response.message);
       showToast("success", response.message);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleConfirmDuplicateSend = async () => {
+    try {
+      setPendingDuplicateRecipients(null);
+      await executeSend();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to send the campaign.";
       setError(message);
       showToast("error", message);
-    } finally {
-      setBusyAction(null);
+    }
+  };
+
+  const handleCancelDuplicateSend = () => {
+    const focusEmail = pendingDuplicateRecipients?.[0];
+    setPendingDuplicateRecipients(null);
+    if (focusEmail) {
+      focusClientEmail(focusEmail);
+    }
+  };
+
+  const handleSend = async () => {
+    try {
+      validateBeforeSubmit();
+      if (!selectedTemplateId) {
+        throw new Error("Select a template before dispatching the email.");
+      }
+
+      const duplicates = await findDuplicateRecipientEmails();
+      if (duplicates.length) {
+        setPendingDuplicateRecipients(duplicates);
+        return;
+      }
+
+      await executeSend();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unable to send the campaign.";
+      setError(message);
+      showToast("error", message);
     }
   };
 
@@ -532,6 +634,25 @@ export function WorkspacePage() {
   return (
     <>
       <ActionToast toast={toast} />
+      <ConfirmationDialog
+        busy={busyAction === "send"}
+        cancelLabel="Cancel"
+        confirmLabel="Send anyway"
+        description={
+          pendingDuplicateRecipients?.length
+            ? `You have already sent mail to ${pendingDuplicateRecipients.join(", ")}. Are you sure you want to send again?`
+            : ""
+        }
+        onCancel={handleCancelDuplicateSend}
+        onConfirm={() => void handleConfirmDuplicateSend()}
+        open={Boolean(pendingDuplicateRecipients?.length)}
+        title={
+          pendingDuplicateRecipients?.length
+            ? "Already sent to this client email"
+            : "Already sent to this client email"
+        }
+        tone="warning"
+      />
       <AppShell
         actions={
           <>
@@ -744,18 +865,43 @@ export function WorkspacePage() {
 
             {senderMode === "gmail" ? (
               <div className="mt-5">
+                <div
+                  className="h-0 overflow-hidden opacity-0"
+                  aria-hidden="true"
+                >
+                  <input
+                    autoComplete="username"
+                    name="username"
+                    tabIndex={-1}
+                    type="text"
+                  />
+                  <input
+                    autoComplete="current-password"
+                    name="password"
+                    tabIndex={-1}
+                    type="password"
+                  />
+                </div>
                 <Field
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  autoCorrect="off"
                   helper="Use a normal Gmail address (@gmail.com)."
                   label="Which Gmail should be used?"
+                  name="cw-gmail-direct-email-new"
                   onChange={(event) => setGmailAddress(event.target.value)}
                   placeholder="sender@gmail.com"
-                  type="email"
+                  spellCheck={false}
+                  type="text"
+                  inputMode="email"
                   value={gmailAddress}
                 />
                 <div className="mt-4">
                   <Field
+                    autoComplete="new-password"
                     helper="Enter Gmail App Password (16-character). This is required for normal Gmail SMTP sends."
                     label="Gmail App Password"
+                    name="cw-gmail-direct-app-password-new"
                     onChange={(event) =>
                       setGmailAppPassword(event.target.value)
                     }
@@ -959,6 +1105,10 @@ export function WorkspacePage() {
                     <Field
                       helper="This is used for delivery and tracking in sent history."
                       label="Client email"
+                      ref={(input) => {
+                        clientEmailInputRefs.current[index] =
+                          input as HTMLInputElement | null;
+                      }}
                       onChange={(event) =>
                         setClients((current) =>
                           current.map((item, clientIndex) =>
@@ -1080,33 +1230,29 @@ export function WorkspacePage() {
                   Schedule send date and time
                 </p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
-                  Optional. Tap anywhere on this row to pick a date and time.
+                  Optional. Use the planner below to send now or lock in a future dispatch window.
                 </p>
-                <button
-                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface-muted)] px-4 py-4 text-left transition hover:border-[var(--line-strong)] hover:bg-[var(--surface-high)]"
-                  onClick={openSchedulePicker}
-                  type="button"
-                >
-                  <div>
-                    <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
-                      Scheduled dispatch
+                <div className="mt-3 space-y-3">
+                  {senderMode === "gmail" ? (
+                    <div className="rounded-[1.4rem] border border-[rgba(var(--danger-rgb),0.16)] bg-[rgba(var(--danger-rgb),0.08)] px-4 py-3 text-sm leading-7 text-[var(--danger)]">
+                      Gmail Direct can send immediately only. Switch to Sales or Admin sender to schedule this campaign.
+                    </div>
+                  ) : null}
+                  <SchedulePicker
+                    description="Choose a polished schedule slot with quick dates, a calendar grid, and exact time control."
+                    disabled={senderMode === "gmail"}
+                    onChange={setScheduledFor}
+                    value={scheduledFor}
+                  />
+                  <div className="rounded-[1.2rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.18)] px-4 py-3">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                      Dispatch summary
                     </p>
-                    <p className="mt-1 text-sm font-bold text-[var(--text)]">
-                      {scheduledFor
-                        ? new Date(scheduledFor).toLocaleString()
-                        : "Send immediately (no schedule selected)"}
+                    <p className="mt-2 text-sm font-bold text-[var(--text)]">
+                      {formatScheduledDateTime(scheduledFor)}
                     </p>
                   </div>
-                  <Clock3 className="h-5 w-5 text-[var(--secondary)]" />
-                </button>
-                <input
-                  className="pointer-events-none absolute opacity-0"
-                  onChange={(event) => setScheduledFor(event.target.value)}
-                  ref={scheduleInputRef}
-                  tabIndex={-1}
-                  type="datetime-local"
-                  value={scheduledFor}
-                />
+                </div>
               </div>
               <FileInput
                 files={emailAttachments}
@@ -1352,8 +1498,20 @@ export function WorkspacePage() {
                       />
                     </div>
 
-                    <div className="mt-5 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-                      <div className="rounded-[1.6rem] border border-[var(--line)] bg-[var(--surface)] p-5">
+                    <div
+                      className={cn(
+                        "mt-5 grid gap-4 grid-cols-1",
+                        previewViewport === "mobile"
+                          ? "xl:grid-cols-[1.15fr_0.85fr]"
+                          : "",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "rounded-[1.6rem] border border-[var(--line)] bg-[var(--surface)] p-5",
+                          previewViewport === "tab" && "xl:col-span-full",
+                        )}
+                      >
                         <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
                           Message body
                         </p>
@@ -1366,7 +1524,12 @@ export function WorkspacePage() {
                             previewViewportClass,
                           )}
                         >
-                          <div className="max-h-[36rem] overflow-auto p-5 text-sm leading-7 text-[var(--muted)] scrollbar-thin">
+                          <div
+                            className={cn(
+                              "overflow-auto scrollbar-thin",
+                              previewViewportFrameClass,
+                            )}
+                          >
                             <div
                               dangerouslySetInnerHTML={{
                                 __html: previewEmail.html_body,
@@ -1384,7 +1547,12 @@ export function WorkspacePage() {
                         </div>
                       </div>
 
-                      <div className="space-y-4">
+                      <div
+                        className={cn(
+                          "space-y-4",
+                          previewViewport === "tab" && "xl:col-span-full",
+                        )}
+                      >
                         <div className="rounded-[1.6rem] bg-[var(--surface-muted)] p-5">
                           <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
                             Recipient

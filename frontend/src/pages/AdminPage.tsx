@@ -15,6 +15,7 @@ import {
   type ActionToastState,
 } from "../components/ActionToast";
 import { AppShell } from "../components/AppShell";
+import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { Field } from "../components/Field";
 import { StatusPill } from "../components/StatusPill";
 import { UserCard } from "../components/UserCard";
@@ -28,7 +29,8 @@ const initialForm = {
   full_name: "",
   email: "",
   phone: "",
-  can_view_team_history: false,
+  can_view_other_sent_history: false,
+  can_view_other_client_replies: false,
   can_use_sales_sender: false,
   can_use_admin_sender: false,
   new_password: "",
@@ -63,6 +65,7 @@ export function AdminPage() {
   const [credentialResult, setCredentialResult] = useState<
     ManagedUserCreateResponse | ManagedUserPasswordResetResponse | null
   >(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<User | null>(null);
   const composerRef = useRef<HTMLElement | null>(null);
   const directoryRef = useRef<HTMLElement | null>(null);
 
@@ -128,7 +131,9 @@ export function AdminPage() {
           full_name: form.full_name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
-          can_view_team_history: form.can_view_team_history,
+          can_view_other_sent_history: form.can_view_other_sent_history,
+          can_view_other_client_replies:
+            form.can_view_other_client_replies,
           can_use_sales_sender: form.can_use_sales_sender,
           can_use_admin_sender: form.can_use_admin_sender,
           new_password: form.new_password.trim() || undefined,
@@ -141,7 +146,9 @@ export function AdminPage() {
           full_name: form.full_name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
-          can_view_team_history: form.can_view_team_history,
+          can_view_other_sent_history: form.can_view_other_sent_history,
+          can_view_other_client_replies:
+            form.can_view_other_client_replies,
           can_use_sales_sender: form.can_use_sales_sender,
           can_use_admin_sender: form.can_use_admin_sender,
         });
@@ -167,7 +174,8 @@ export function AdminPage() {
       full_name: user.full_name,
       email: user.email,
       phone: user.phone ?? "",
-      can_view_team_history: user.can_view_team_history,
+      can_view_other_sent_history: user.can_view_other_sent_history,
+      can_view_other_client_replies: user.can_view_other_client_replies,
       can_use_sales_sender: user.can_use_sales_sender,
       can_use_admin_sender: user.can_use_admin_sender,
       new_password: "",
@@ -180,18 +188,22 @@ export function AdminPage() {
   };
 
   const handleDelete = async (user: User) => {
-    const confirmed = window.confirm(
-      `Delete ${user.full_name}? This cannot be undone.`,
-    );
-    if (!confirmed) {
+    setPendingDeleteUser(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!pendingDeleteUser) {
       return;
     }
 
     try {
-      setSelectedBusyUserId(user.id);
+      setSelectedBusyUserId(pendingDeleteUser.id);
       setBusyAction("delete");
-      await api.deleteUser(user.id);
-      showToast("success", `${user.full_name} was removed from the workspace.`);
+      await api.deleteUser(pendingDeleteUser.id);
+      showToast(
+        "success",
+        `${pendingDeleteUser.full_name} was removed from the workspace.`,
+      );
       await loadUsers();
     } catch (err) {
       showToast(
@@ -199,6 +211,7 @@ export function AdminPage() {
         err instanceof Error ? err.message : "Unable to delete user.",
       );
     } finally {
+      setPendingDeleteUser(null);
       setSelectedBusyUserId(null);
       setBusyAction(null);
     }
@@ -242,7 +255,11 @@ export function AdminPage() {
   const stats = useMemo(
     () => ({
       total: users.length,
-      teamHistory: users.filter((item) => item.can_view_team_history).length,
+      sentHistory: users.filter((item) => item.can_view_other_sent_history)
+        .length,
+      clientReplies: users.filter(
+        (item) => item.can_view_other_client_replies,
+      ).length,
       sales: users.filter((item) => item.can_use_sales_sender).length,
       admin: users.filter((item) => item.can_use_admin_sender).length,
     }),
@@ -318,7 +335,8 @@ export function AdminPage() {
         "Email",
         "Phone",
         "Role",
-        "Team History",
+        "Other Sent History",
+        "Other Client Replies",
         "Sales Sender",
         "Admin Sender",
         "Last Login",
@@ -328,7 +346,8 @@ export function AdminPage() {
         user.email,
         user.phone ?? "",
         user.role,
-        String(user.can_view_team_history),
+        String(user.can_view_other_sent_history),
+        String(user.can_view_other_client_replies),
         String(user.can_use_sales_sender),
         String(user.can_use_admin_sender),
         user.last_login ?? "",
@@ -357,6 +376,28 @@ export function AdminPage() {
   return (
     <>
       <ActionToast toast={toast} />
+      <ConfirmationDialog
+        busy={busyAction === "delete"}
+        confirmLabel="Delete user"
+        description={
+          pendingDeleteUser
+            ? `${pendingDeleteUser.full_name} will be removed from the workspace. This action cannot be undone.`
+            : ""
+        }
+        onCancel={() => {
+          if (busyAction !== "delete") {
+            setPendingDeleteUser(null);
+          }
+        }}
+        onConfirm={() => void confirmDeleteUser()}
+        open={Boolean(pendingDeleteUser)}
+        title={
+          pendingDeleteUser
+            ? `Delete ${pendingDeleteUser.full_name}?`
+            : "Delete user?"
+        }
+        tone="danger"
+      />
       <AppShell
         actions={
           <>
@@ -396,7 +437,7 @@ export function AdminPage() {
         title="User Access Control"
       >
         <motion.section
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
           id="overview"
           {...sectionMotion(0.02)}
         >
@@ -409,18 +450,25 @@ export function AdminPage() {
               onClick: () => setRoleFilter("all"),
             },
             {
-              label: "Team history",
-              value: stats.teamHistory,
-              badge: "Shared",
+              label: "Sent history",
+              value: stats.sentHistory,
+              badge: "Sent",
               tone: "accent",
               onClick: () => setStatusFilter("all"),
+            },
+            {
+              label: "Client replies",
+              value: stats.clientReplies,
+              badge: "Replies",
+              tone: "secondary",
+              onClick: () => setRoleFilter("user"),
             },
             {
               label: "Sales access",
               value: stats.sales,
               badge: "Sales",
               tone: "secondary",
-              onClick: () => setRoleFilter("user"),
+              onClick: () => setRoleFilter("super_admin"),
             },
             {
               label: "Admin access",
@@ -614,13 +662,24 @@ export function AdminPage() {
 
           <div className="mt-5 grid gap-4">
             <ToggleRow
-              checked={form.can_view_team_history}
-              description="Allows this user to view others' email history."
-              label="Allow team history access"
+              checked={form.can_view_other_sent_history}
+              description="Allows this user to view emails sent by other users in History."
+              label="View other email sent history"
               onChange={(checked) =>
                 setForm((current) => ({
                   ...current,
-                  can_view_team_history: checked,
+                  can_view_other_sent_history: checked,
+                }))
+              }
+            />
+            <ToggleRow
+              checked={form.can_view_other_client_replies}
+              description="Allows this user to view client replies that belong to other users."
+              label="View other client reply"
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  can_view_other_client_replies: checked,
                 }))
               }
             />
@@ -699,8 +758,8 @@ export function AdminPage() {
               User directory
             </h2>
             <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
-              Review identity, permissions, password actions, and history access
-              for every user.
+              Review identity, permissions, password actions, and workspace
+              visibility rules for every user.
             </p>
           </div>
 

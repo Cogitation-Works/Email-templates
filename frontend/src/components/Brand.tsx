@@ -1,6 +1,10 @@
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className={
+        compact ? "flex items-center gap-1" : "flex items-center gap-2"
+      }
+    >
       <div
         className={
           compact
@@ -11,7 +15,7 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         <img
           alt="Cogitation Works"
           className={
-            compact ? "h-11 w-11 object-cover" : "h-17 w-17 object-cover"
+            compact ? "h-9 w-9 object-cover" : "h-17 w-17 object-cover"
           }
           src="/cw-logo.png"
         />
@@ -20,7 +24,7 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         <p
           className={
             compact
-              ? "text-[1.1rem] font-bold tracking-tight"
+              ? "text-[0.9rem] font-bold tracking-tight whitespace-nowrap"
               : "text-xl font-bold tracking-tight"
           }
         >

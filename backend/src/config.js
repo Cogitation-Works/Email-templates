@@ -20,6 +20,10 @@ function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function isGmailAddress(value) {
+  return normalizeString(value).toLowerCase().endsWith("@gmail.com");
+}
+
 function buildSmtpAccount(key, options) {
   if (
     !options.host ||
@@ -107,6 +111,40 @@ const smtpAccounts = [
   }),
 ].filter(Boolean);
 
+const zohoImapAccounts = (() => {
+  const seen = new Set();
+  const accounts = [];
+
+  for (const account of smtpAccounts) {
+    const host = String(account.host || "")
+      .trim()
+      .toLowerCase();
+    const username = String(account.username || "")
+      .trim()
+      .toLowerCase();
+
+    if (
+      !host.includes("zoho") ||
+      !username ||
+      seen.has(username) ||
+      isGmailAddress(username) ||
+      isGmailAddress(account.senderEmail)
+    ) {
+      continue;
+    }
+
+    seen.add(username);
+    accounts.push({
+      key: account.key,
+      username: account.username,
+      password: account.password,
+      senderEmail: account.senderEmail,
+    });
+  }
+
+  return accounts;
+})();
+
 const config = {
   port: toNumber(process.env.PORT, 8000),
   nodeEnv: normalizeString(process.env.NODE_ENV, "development"),
@@ -149,6 +187,18 @@ const config = {
   superAdminEmail: normalizeString(process.env.SUPER_ADMIN_EMAIL),
   superAdminPassword: normalizeString(process.env.SUPER_ADMIN_PASSWORD),
   schedulerSecret: normalizeString(process.env.SCHEDULER_SECRET),
+  zohoImapEnabled: toBoolean(process.env.ZOHO_IMAP_ENABLED, true),
+  zohoImapHost: normalizeString(process.env.ZOHO_IMAP_HOST, "imappro.zoho.in"),
+  zohoImapPort: toNumber(process.env.ZOHO_IMAP_PORT, 993),
+  zohoImapSecure: toBoolean(process.env.ZOHO_IMAP_SECURE, true),
+  zohoImapMailbox: normalizeString(process.env.ZOHO_IMAP_MAILBOX, "INBOX"),
+  zohoImapLookbackDays: toNumber(process.env.ZOHO_IMAP_LOOKBACK_DAYS, 21),
+  zohoImapSyncBatchSize: toNumber(process.env.ZOHO_IMAP_SYNC_BATCH_SIZE, 80),
+  zohoImapSyncCooldownSeconds: toNumber(
+    process.env.ZOHO_IMAP_SYNC_COOLDOWN_SECONDS,
+    45,
+  ),
+  zohoImapAccounts,
   zohoSenderEmail: normalizeString(
     process.env.ZOHO_SENDER_EMAIL,
     normalizeString(process.env.SMTP_SECONDARY_SENDER_EMAIL),
@@ -202,6 +252,12 @@ function validateCriticalEnvironment() {
 
   if (!config.schedulerSecret) {
     warnings.push("SCHEDULER_SECRET is not configured.");
+  }
+
+  if (config.zohoImapEnabled && !config.zohoImapAccounts.length) {
+    warnings.push(
+      "ZOHO_IMAP_ENABLED=true but no Zoho-linked SMTP accounts were found for IMAP sync.",
+    );
   }
 
   const isProduction = config.nodeEnv === "production";

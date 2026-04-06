@@ -1,5 +1,7 @@
 import {
   Activity,
+  Bell,
+  Download,
   History,
   LayoutDashboard,
   LogOut,
@@ -12,14 +14,15 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
+import { api } from "../api/client";
 import { Brand } from "./Brand";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "../context/AuthContext";
-import { cn } from "../lib/utils";
-import type { Role } from "../types";
+import { cn, relativeTime } from "../lib/utils";
+import type { ClientReplyNotification, Role } from "../types";
 
 const navConfig = [
   {
@@ -38,6 +41,12 @@ const navConfig = [
     label: "Admin",
     href: "/admin",
     icon: Shield,
+    roles: ["super_admin"] as Role[],
+  },
+  {
+    label: "Export",
+    href: "/exports",
+    icon: Download,
     roles: ["super_admin"] as Role[],
   },
   {
@@ -94,6 +103,16 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [shellSearch, setShellSearch] = useState("");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [replyNotifications, setReplyNotifications] = useState<
+    ClientReplyNotification[]
+  >([]);
+  const [unreadReplyCount, setUnreadReplyCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermission>("default");
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
+  const shownBrowserAlertsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const updateViewport = () => {
@@ -104,6 +123,117 @@ export function AppShell({
     window.addEventListener("resize", updateViewport);
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return;
+    }
+    setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    const onWindowClick = (event: MouseEvent) => {
+      if (
+        notificationPanelRef.current &&
+        !notificationPanelRef.current.contains(event.target as Node)
+      ) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    if (notificationsOpen) {
+      window.addEventListener("mousedown", onWindowClick);
+    }
+
+    return () => window.removeEventListener("mousedown", onWindowClick);
+  }, [notificationsOpen]);
+
+  const maybeShowBrowserNotifications = (items: ClientReplyNotification[]) => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      Notification.permission !== "granted"
+    ) {
+      return;
+    }
+
+    const freshUnread = items.filter(
+      (item) => item.unread && !shownBrowserAlertsRef.current.has(item.id),
+    );
+    for (const item of freshUnread.slice(0, 3)) {
+      shownBrowserAlertsRef.current.add(item.id);
+      const title =
+        item.client_name?.trim() || item.from_name?.trim() || "Client message";
+      const body = item.preview_text?.trim() || item.subject || "New reply";
+      new Notification(`Reply from ${title}`, { body });
+    }
+  };
+
+  const loadReplyNotifications = async ({ quiet = false } = {}) => {
+    if (!user) {
+      return;
+    }
+
+    if (!quiet) {
+      setLoadingNotifications(true);
+    }
+
+    try {
+      const response = await api.listClientReplyNotifications();
+      setReplyNotifications(response.notifications || []);
+      setUnreadReplyCount(response.unread_count || 0);
+      maybeShowBrowserNotifications(response.notifications || []);
+    } catch (_error) {
+      // Notifications should not block shell rendering.
+    } finally {
+      if (!quiet) {
+        setLoadingNotifications(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    void loadReplyNotifications();
+    const timer = window.setInterval(() => {
+      void loadReplyNotifications({ quiet: true });
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!notificationsOpen || !user) {
+      return;
+    }
+
+    const unreadIds = replyNotifications
+      .filter((item) => item.unread)
+      .map((item) => item.id);
+    if (!unreadIds.length) {
+      return;
+    }
+
+    void api.markClientReplyNotificationsRead(unreadIds).then(() => {
+      setUnreadReplyCount(0);
+      setReplyNotifications((current) =>
+        current.map((item) =>
+          unreadIds.includes(item.id) ? { ...item, unread: false } : item,
+        ),
+      );
+    });
+  }, [notificationsOpen, replyNotifications, user]);
+
+  const requestBrowserNotifications = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+  };
 
   const navItems = useMemo(
     () => navConfig.filter((item) => item.roles.includes(user?.role ?? "user")),
@@ -121,6 +251,11 @@ export function AppShell({
       return;
     }
     setShellSearch(value);
+  };
+
+  const handleNotificationClick = () => {
+    setNotificationsOpen(false);
+    navigate("/history?view=replies");
   };
 
   const handleTabSelection = (tab: AppShellTab) => {
@@ -245,6 +380,105 @@ export function AppShell({
               </span>
             </div>
             <ThemeToggle />
+            <div className="relative" ref={notificationPanelRef}>
+              <button
+                aria-label="Client message notifications"
+                className="relative grid h-10 w-10 place-items-center rounded-xl border border-[var(--line)] bg-[var(--surface-high)] text-[var(--text)] transition hover:bg-[var(--surface-strong)]"
+                onClick={() => {
+                  setNotificationsOpen((open) => !open);
+                  if (!notificationsOpen) {
+                    void loadReplyNotifications();
+                  }
+                }}
+                type="button"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadReplyCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-black leading-none text-[#052113]">
+                    {Math.min(unreadReplyCount, 99)}
+                  </span>
+                ) : null}
+              </button>
+
+              {notificationsOpen ? (
+                <div className="absolute right-0 z-50 mt-2 w-[min(26rem,90vw)] overflow-hidden rounded-2xl border border-[var(--glass-line)] bg-[var(--surface-nav)] shadow-2xl shadow-[rgba(var(--shadow),0.25)]">
+                  <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
+                    <div>
+                      <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                        Client Messages
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {unreadReplyCount} unread
+                      </p>
+                    </div>
+                    <button
+                      className="rounded-full bg-[var(--surface-high)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)] transition hover:text-[var(--text)]"
+                      onClick={() => void loadReplyNotifications()}
+                      type="button"
+                    >
+                      {loadingNotifications ? "Loading" : "Refresh"}
+                    </button>
+                  </div>
+
+                  <div className="max-h-[22rem] overflow-auto">
+                    {replyNotifications.length === 0 ? (
+                      <div className="px-4 py-5 text-sm text-[var(--muted)]">
+                        No client messages yet.
+                      </div>
+                    ) : (
+                      replyNotifications.map((item) => (
+                        <button
+                          className={cn(
+                            "w-full border-b border-[var(--line)] px-4 py-3 text-left transition last:border-b-0 hover:bg-[var(--surface-high)]",
+                            item.unread &&
+                              "bg-[rgba(var(--accent-rgb),0.09)] hover:bg-[rgba(var(--accent-rgb),0.14)]",
+                          )}
+                          key={item.id}
+                          onClick={handleNotificationClick}
+                          type="button"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="line-clamp-1 text-sm font-bold text-[var(--text)]">
+                              {item.client_name || item.from_email}
+                            </p>
+                            <span className="shrink-0 text-xs text-[var(--soft)]">
+                              {relativeTime(item.received_at)}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--soft)]">
+                            {item.campaign_template_title || "Client message"}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-sm text-[var(--muted)]">
+                            {item.preview_text || item.subject}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[var(--line)] px-4 py-3">
+                    <button
+                      className="rounded-full bg-[var(--surface-high)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--muted)] transition hover:text-[var(--text)]"
+                      onClick={handleNotificationClick}
+                      type="button"
+                    >
+                      Open History
+                    </button>
+                    {notificationPermission !== "granted" &&
+                    typeof window !== "undefined" &&
+                    "Notification" in window ? (
+                      <button
+                        className="rounded-full bg-[rgba(var(--accent-rgb),0.14)] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--accent)] transition hover:bg-[rgba(var(--accent-rgb),0.2)]"
+                        onClick={() => void requestBrowserNotifications()}
+                        type="button"
+                      >
+                        Enable Browser Alerts
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <div className="hidden min-w-0 max-w-[18rem] text-right lg:block">
               <p className="truncate text-[1rem] font-bold text-[var(--text)]">
                 {user?.full_name || "User"}
@@ -329,15 +563,22 @@ export function AppShell({
                 <NavLink
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 rounded-xl px-4 py-3.5 transition",
+                      "group relative flex items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3.5 transition",
                       isActive
-                        ? "border-l-4 border-[var(--secondary)] bg-[var(--surface-strong)] text-[var(--accent)]"
-                        : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--text)] hover:translate-x-1",
+                        ? "border-[rgba(var(--accent-rgb),0.28)] bg-[linear-gradient(135deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.04))] text-[var(--accent)] shadow-[0_18px_38px_rgba(var(--shadow),0.14)]"
+                        : "border-transparent text-[var(--muted)] hover:border-[var(--glass-line)] hover:bg-[var(--surface-strong)] hover:text-[var(--text)] hover:translate-x-1",
                     )
                   }
                   key={item.href}
                   to={item.href}
                 >
+                  <span
+                    className={cn(
+                      "absolute inset-y-3 left-0 w-1 rounded-r-full bg-transparent transition",
+                      location.pathname === item.href &&
+                        "bg-[linear-gradient(180deg,var(--secondary),var(--accent))]",
+                    )}
+                  />
                   <Icon className="h-4 w-4" />
                   <span>{item.label}</span>
                 </NavLink>
@@ -454,10 +695,10 @@ export function AppShell({
                     <NavLink
                       className={({ isActive }) =>
                         cn(
-                          "shell-mobile-nav-link flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition",
+                          "shell-mobile-nav-link flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition",
                           isActive
-                            ? "border-l-4 border-[var(--secondary)] bg-[var(--surface-strong)] text-[var(--accent)]"
-                            : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--text)]",
+                            ? "border-[rgba(var(--accent-rgb),0.28)] bg-[linear-gradient(135deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.05))] text-[var(--accent)]"
+                            : "border-transparent text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--text)]",
                         )
                       }
                       key={`drawer-${item.href}`}

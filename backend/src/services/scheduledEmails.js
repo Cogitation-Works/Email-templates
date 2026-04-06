@@ -8,6 +8,16 @@ const { deliverEmail, previewEmail } = require("./emailer");
 
 const SCHEDULED_EMAILS_COLLECTION = "scheduled_emails";
 
+function unwrapFindOneAndUpdateResult(result) {
+  if (!result) {
+    return null;
+  }
+  if (typeof result === "object" && "value" in result) {
+    return result.value || null;
+  }
+  return result;
+}
+
 async function ensureScheduledEmailIndexes(db) {
   await db
     .collection(SCHEDULED_EMAILS_COLLECTION)
@@ -91,12 +101,22 @@ async function processDueScheduledEmails(db, { batchSize = 25 } = {}) {
 
   for (let index = 0; index < batchSize; index += 1) {
     const claimedAt = new Date();
+    const staleBefore = new Date(claimedAt.getTime() - 10 * 60 * 1000);
     const claimed = await db
       .collection(SCHEDULED_EMAILS_COLLECTION)
       .findOneAndUpdate(
         {
-          status: "pending",
-          sendAt: { $lte: now },
+          $or: [
+            {
+              status: "pending",
+              sendAt: { $lte: now },
+            },
+            {
+              status: "processing",
+              sendAt: { $lte: now },
+              updatedAt: { $lte: staleBefore },
+            },
+          ],
         },
         {
           $set: {
@@ -110,7 +130,7 @@ async function processDueScheduledEmails(db, { batchSize = 25 } = {}) {
         },
       );
 
-    const document = claimed?.value;
+    const document = unwrapFindOneAndUpdateResult(claimed);
     if (!document) {
       break;
     }

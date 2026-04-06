@@ -59,7 +59,7 @@ export function SignInPage() {
   const [authStep, setAuthStep] = useState<AuthStep>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loginOtpCode, setLoginOtpCode] = useState("");
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotOtpCode, setForgotOtpCode] = useState("");
