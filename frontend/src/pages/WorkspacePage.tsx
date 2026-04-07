@@ -934,7 +934,26 @@ export function WorkspacePage() {
                   </p>
                 </details>
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] px-4 py-4">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
+                  Gmail credentials
+                </p>
+                <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
+                  Gmail app password is shown only in Gmail Direct mode. Current sender is{" "}
+                  <span className="font-black text-[var(--text)]">
+                    {senderMode === "sales" ? "Sales Zoho" : "Admin Zoho"}
+                  </span>.
+                </p>
+                <button
+                  className="mt-3 inline-flex items-center gap-2 rounded-full border border-[rgba(var(--accent-rgb),0.28)] bg-[rgba(var(--accent-rgb),0.1)] px-4 py-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]"
+                  onClick={() => setSenderMode("gmail")}
+                  type="button"
+                >
+                  Switch to Gmail Direct
+                </button>
+              </div>
+            )}
           </motion.section>
 
           <motion.section

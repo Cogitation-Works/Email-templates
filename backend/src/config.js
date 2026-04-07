@@ -20,6 +20,14 @@ function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
+function normalizeSameSite(value, fallback = "lax") {
+  const normalized = normalizeString(value, fallback).toLowerCase();
+  if (["lax", "strict", "none"].includes(normalized)) {
+    return normalized;
+  }
+  return fallback;
+}
+
 function isGmailAddress(value) {
   return normalizeString(value).toLowerCase().endsWith("@gmail.com");
 }
@@ -177,7 +185,17 @@ const config = {
     process.env.SESSION_COOKIE_NAME,
     "cw_session",
   ),
-  secureCookies: toBoolean(process.env.SECURE_COOKIES, false),
+  secureCookies: toBoolean(
+    process.env.SECURE_COOKIES,
+    normalizeString(process.env.NODE_ENV, "development") === "production",
+  ),
+  sessionCookieSameSite: normalizeSameSite(
+    process.env.SESSION_COOKIE_SAMESITE,
+    normalizeString(process.env.NODE_ENV, "development") === "production"
+      ? "none"
+      : "lax",
+  ),
+  sessionCookieDomain: normalizeString(process.env.SESSION_COOKIE_DOMAIN),
   emailDeliveryMode: normalizeString(process.env.EMAIL_DELIVERY_MODE, "log"),
   smtpAccounts,
   companyName: normalizeString(process.env.COMPANY_NAME, "Cogitation Works"),
@@ -252,6 +270,12 @@ function validateCriticalEnvironment() {
 
   if (!config.schedulerSecret) {
     warnings.push("SCHEDULER_SECRET is not configured.");
+  }
+
+  if (config.sessionCookieSameSite === "none" && !config.secureCookies) {
+    warnings.push(
+      "SESSION_COOKIE_SAMESITE=none requires SECURE_COOKIES=true in modern browsers.",
+    );
   }
 
   if (config.zohoImapEnabled && !config.zohoImapAccounts.length) {

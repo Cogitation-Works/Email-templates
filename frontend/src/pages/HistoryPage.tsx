@@ -155,6 +155,30 @@ function matchSentRecord(record: SentLeadRecord, query: string) {
     .includes(query);
 }
 
+function normalizeRole(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeName(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isSuperAdminSentRecord(record: SentLeadRecord) {
+  const role = normalizeRole(record.created_by_role);
+  const name = normalizeName(record.created_by);
+  return role === "super_admin" || name === "superadmin" || name === "super admin";
+}
+
+function isSuperAdminReplyRecord(record: LeadReplyHistoryRecord) {
+  const role = normalizeRole(record.campaign_created_by_role);
+  const name = normalizeName(record.campaign_created_by);
+  return role === "super_admin" || name === "superadmin" || name === "super admin";
+}
+
 function matchReplyRecord(record: LeadReplyHistoryRecord, query: string) {
   if (!query) {
     return true;
@@ -638,9 +662,12 @@ export function HistoryPage() {
       sentSections
         .map((section) => ({
           ...section,
-          records: section.records.filter((record) =>
-            matchSentRecord(record, normalizedQuery),
-          ),
+          records: section.records.filter((record) => {
+            if (section.id === "others" && isSuperAdminSentRecord(record)) {
+              return false;
+            }
+            return matchSentRecord(record, normalizedQuery);
+          }),
         }))
         .filter((section) => section.records.length > 0 || !normalizedQuery),
     [normalizedQuery, sentSections],
@@ -650,9 +677,12 @@ export function HistoryPage() {
       replySections
         .map((section) => ({
           ...section,
-          records: section.records.filter((record) =>
-            matchReplyRecord(record, normalizedQuery),
-          ),
+          records: section.records.filter((record) => {
+            if (section.id === "others" && isSuperAdminReplyRecord(record)) {
+              return false;
+            }
+            return matchReplyRecord(record, normalizedQuery);
+          }),
         }))
         .filter((section) => section.records.length > 0 || !normalizedQuery),
     [normalizedQuery, replySections],
@@ -1279,20 +1309,20 @@ export function HistoryPage() {
                 </div>
 
                 {historyViewMode === "sent" ? (
-                  <div className="grid gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-5">
-                    <div className="rounded-[1.4rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.22)] px-4 py-4">
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
+                    <div className="sm:col-span-2 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(155deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.04)_55%,rgba(var(--bg-rgb),0.18)_100%)] px-4 py-4">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Scheduled
                       </p>
-                      <p className="mt-2 text-2xl font-black text-[var(--secondary)]">
+                      <p className="mt-2 text-3xl font-black text-[var(--secondary)]">
                         {sentStatusSummary.scheduled}
                       </p>
                     </div>
-                    <div className="rounded-[1.4rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.22)] px-4 py-4">
+                    <div className="sm:col-span-2 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(155deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.04)_55%,rgba(var(--bg-rgb),0.18)_100%)] px-4 py-4">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Processing
                       </p>
-                      <p className="mt-2 text-2xl font-black text-[var(--accent)]">
+                      <p className="mt-2 text-3xl font-black text-[var(--accent)]">
                         {sentStatusSummary.sending}
                       </p>
                     </div>
@@ -1300,7 +1330,7 @@ export function HistoryPage() {
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Sent
                       </p>
-                      <p className="mt-2 text-2xl font-black text-[var(--text)]">
+                      <p className="mt-2 text-3xl font-black text-[var(--text)]">
                         {sentStatusSummary.sent}
                       </p>
                     </div>
@@ -1308,7 +1338,7 @@ export function HistoryPage() {
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Failed
                       </p>
-                      <p className="mt-2 text-2xl font-black text-[var(--danger)]">
+                      <p className="mt-2 text-3xl font-black text-[var(--danger)]">
                         {sentStatusSummary.failed}
                       </p>
                     </div>
@@ -1316,16 +1346,56 @@ export function HistoryPage() {
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Last scheduler tick
                       </p>
-                      <p className="mt-2 text-sm font-black text-[var(--text)]">
+                      <p className="mt-2 text-base font-black text-[var(--text)]">
                         {schedulerLastTick
                           ? formatDateTime(schedulerLastTick)
                           : "No tick yet"}
                       </p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-[rgba(var(--accent-rgb),0.18)] bg-[rgba(var(--bg-rgb),0.28)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                          {schedulerStatus?.in_flight ? "Running" : "Healthy"}
+                        </span>
+                        <p className="text-xs text-[var(--muted)]">
+                          {schedulerLastTick
+                            ? `${relativeTime(schedulerLastTick)} | ${schedulerHeartbeatLabel}`
+                            : schedulerHeartbeatLabel}
+                        </p>
+                      </div>
+                      <p className="hidden mt-1 text-xs text-[var(--muted)]">
                         {schedulerLastTick
                           ? `${relativeTime(schedulerLastTick)} • ${schedulerHeartbeatLabel}`
                           : schedulerHeartbeatLabel}
                       </p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
+                            Interval
+                          </p>
+                          <p className="mt-2 text-sm font-black text-[var(--text)]">
+                            {schedulerStatus?.interval_seconds
+                              ? `${schedulerStatus.interval_seconds}s`
+                              : "Default"}
+                          </p>
+                        </div>
+                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
+                            Last duration
+                          </p>
+                          <p className="mt-2 text-sm font-black text-[var(--text)]">
+                            {schedulerStatus?.last_duration_ms
+                              ? `${Math.max(1, Math.round(schedulerStatus.last_duration_ms / 1000))}s`
+                              : "-"}
+                          </p>
+                        </div>
+                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
+                            Campaigns processed
+                          </p>
+                          <p className="mt-2 text-sm font-black text-[var(--text)]">
+                            {schedulerStatus?.last_result?.campaignProcessed ?? 0}
+                          </p>
+                        </div>
+                      </div>
                       {schedulerStatus?.last_error ? (
                         <p className="mt-2 text-xs leading-6 text-[var(--danger)]">
                           {schedulerStatus.last_error}

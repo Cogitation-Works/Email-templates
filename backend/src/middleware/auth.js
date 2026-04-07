@@ -77,22 +77,32 @@ function issueSessionCookie(res, user, rememberMe) {
   const { token, maxAgeSeconds } = createAccessToken(user, rememberMe);
   const maxAgeMs = maxAgeSeconds * 1000;
   const expiresDate = new Date(Date.now() + maxAgeMs);
-
-  res.cookie(config.sessionCookieName, token, {
+  const cookieBaseOptions = {
     httpOnly: true,
     secure: config.secureCookies,
-    sameSite: "lax",
+    sameSite: config.sessionCookieSameSite,
     path: "/",
+    ...(config.sessionCookieDomain ? { domain: config.sessionCookieDomain } : {}),
+  };
+
+  res.cookie(config.sessionCookieName, token, {
+    ...cookieBaseOptions,
     maxAge: maxAgeMs,
     expires: expiresDate,
   });
 }
 
 function clearSessionCookie(res) {
-  res.clearCookie(config.sessionCookieName, {
+  const cookieBaseOptions = {
     httpOnly: true,
     secure: config.secureCookies,
-    sameSite: "lax",
+    sameSite: config.sessionCookieSameSite,
+    path: "/",
+    ...(config.sessionCookieDomain ? { domain: config.sessionCookieDomain } : {}),
+  };
+
+  res.clearCookie(config.sessionCookieName, {
+    ...cookieBaseOptions,
   });
 }
 
