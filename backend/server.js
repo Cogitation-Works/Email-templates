@@ -78,18 +78,99 @@ const {
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 
-app.use(
+function normalizeHeaderValue(value) {
+  if (Array.isArray(value)) {
+    return normalizeHeaderValue(value[0]);
+  }
+
+  return String(value || "")
+    .split(",")[0]
+    .trim();
+}
+
+function defaultPortForProtocol(protocol) {
+  return protocol === "https:" ? "443" : protocol === "http:" ? "80" : "";
+}
+
+function originMatchesAllowedEntry(origin, allowedOrigin) {
+  if (!allowedOrigin) {
+    return false;
+  }
+
+  if (origin === allowedOrigin) {
+    return true;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    const allowedUrl = new URL(allowedOrigin);
+    const allowedHostname = allowedUrl.hostname.toLowerCase();
+
+    if (!allowedHostname.startsWith("*.")) {
+      return false;
+    }
+
+    const originHostname = originUrl.hostname.toLowerCase();
+    const hostnameSuffix = allowedHostname.slice(1);
+    const originPort = originUrl.port || defaultPortForProtocol(originUrl.protocol);
+    const allowedPort =
+      allowedUrl.port || defaultPortForProtocol(allowedUrl.protocol);
+
+    return (
+      originUrl.protocol === allowedUrl.protocol &&
+      originPort === allowedPort &&
+      originHostname.endsWith(hostnameSuffix)
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
+function resolveRequestOrigin(req) {
+  const forwardedProto =
+    normalizeHeaderValue(req.headers["x-forwarded-proto"]) ||
+    normalizeHeaderValue(req.protocol) ||
+    "http";
+  const forwardedHost =
+    normalizeHeaderValue(req.headers["x-forwarded-host"]) ||
+    normalizeHeaderValue(req.headers.host);
+
+  if (!forwardedHost) {
+    return "";
+  }
+
+  const protocol = forwardedProto.replace(/:$/, "");
+  return `${protocol}://${forwardedHost}`;
+}
+
+function isAllowedCorsOrigin(origin, req) {
+  if (!origin) {
+    return true;
+  }
+
+  const requestOrigin = resolveRequestOrigin(req);
+  if (requestOrigin && origin === requestOrigin) {
+    return true;
+  }
+
+  return config.frontendOrigins.some(
+    (allowedOrigin) =>
+      origin === allowedOrigin || originMatchesAllowedEntry(origin, allowedOrigin),
+  );
+}
+
+app.use((req, res, next) => {
   cors({
     origin(origin, callback) {
-      if (!origin || config.frontendOrigins.includes(origin)) {
+      if (isAllowedCorsOrigin(origin, req)) {
         callback(null, true);
         return;
       }
       callback(new Error("Origin not allowed by CORS."));
     },
     credentials: true,
-  }),
-);
+  })(req, res, next);
+});
 app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
