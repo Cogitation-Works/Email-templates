@@ -1309,65 +1309,80 @@ export function HistoryPage() {
                 </div>
 
                 {historyViewMode === "sent" ? (
-                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
-                    <div className="sm:col-span-2 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(155deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.04)_55%,rgba(var(--bg-rgb),0.18)_100%)] px-4 py-4">
+                  <div className="grid grid-cols-4 gap-3 pt-2">
+                    <div className="min-h-[8.75rem] overflow-hidden rounded-[1.45rem] border border-[rgba(255,190,92,0.12)] bg-[linear-gradient(155deg,rgba(255,190,92,0.12),rgba(var(--bg-rgb),0.18)_72%)] px-4 py-4 shadow-[0_18px_32px_rgba(var(--shadow),0.12)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Scheduled
                       </p>
-                      <p className="mt-2 text-3xl font-black text-[var(--secondary)]">
+                      <p className="mt-2 text-3xl font-black text-[#ffbe5c]">
                         {sentStatusSummary.scheduled}
                       </p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Waiting queue
+                      </p>
                     </div>
-                    <div className="sm:col-span-2 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(155deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.04)_55%,rgba(var(--bg-rgb),0.18)_100%)] px-4 py-4">
+                    <div className="min-h-[8.75rem] overflow-hidden rounded-[1.45rem] border border-[rgba(var(--accent-rgb),0.14)] bg-[linear-gradient(155deg,rgba(var(--accent-rgb),0.12),rgba(var(--bg-rgb),0.18)_72%)] px-4 py-4 shadow-[0_18px_32px_rgba(var(--shadow),0.12)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Processing
                       </p>
                       <p className="mt-2 text-3xl font-black text-[var(--accent)]">
                         {sentStatusSummary.sending}
                       </p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        In flight
+                      </p>
                     </div>
-                    <div className="rounded-[1.4rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.22)] px-4 py-4">
+                    <div className="min-h-[8.75rem] overflow-hidden rounded-[1.45rem] border border-[rgba(var(--secondary-rgb),0.16)] bg-[linear-gradient(155deg,rgba(var(--secondary-rgb),0.14),rgba(var(--bg-rgb),0.18)_72%)] px-4 py-4 shadow-[0_18px_32px_rgba(var(--shadow),0.12)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Sent
                       </p>
-                      <p className="mt-2 text-3xl font-black text-[var(--text)]">
+                      <p className="mt-2 text-3xl font-black text-[var(--secondary)]">
                         {sentStatusSummary.sent}
                       </p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Delivered archive
+                      </p>
                     </div>
-                    <div className="rounded-[1.4rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.22)] px-4 py-4">
+                    <div className="min-h-[8.75rem] overflow-hidden rounded-[1.45rem] border border-[rgba(255,124,153,0.16)] bg-[linear-gradient(155deg,rgba(255,124,153,0.12),rgba(var(--bg-rgb),0.18)_72%)] px-4 py-4 shadow-[0_18px_32px_rgba(var(--shadow),0.12)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Failed
                       </p>
                       <p className="mt-2 text-3xl font-black text-[var(--danger)]">
                         {sentStatusSummary.failed}
                       </p>
+                      <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Needs review
+                      </p>
                     </div>
-                    <div className="rounded-[1.4rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.22)] px-4 py-4">
+                    <div className="col-span-4 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(140deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.06)_42%,rgba(var(--bg-rgb),0.24)_100%)] px-4 py-4 shadow-[0_24px_44px_rgba(var(--shadow),0.14)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Last scheduler tick
                       </p>
-                      <p className="mt-2 text-base font-black text-[var(--text)]">
-                        {schedulerLastTick
-                          ? formatDateTime(schedulerLastTick)
-                          : "No tick yet"}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-[rgba(var(--accent-rgb),0.18)] bg-[rgba(var(--bg-rgb),0.28)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
-                          {schedulerStatus?.in_flight ? "Running" : "Healthy"}
-                        </span>
-                        <p className="text-xs text-[var(--muted)]">
-                          {schedulerLastTick
-                            ? `${relativeTime(schedulerLastTick)} | ${schedulerHeartbeatLabel}`
-                            : schedulerHeartbeatLabel}
-                        </p>
-                      </div>
+                      <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="space-y-2">
+                          <p className="text-lg font-black text-[var(--text)] sm:text-[1.35rem]">
+                            {schedulerLastTick
+                              ? formatDateTime(schedulerLastTick)
+                              : "No tick yet"}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-[rgba(var(--accent-rgb),0.24)] bg-[rgba(var(--bg-rgb),0.38)] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--accent)]">
+                              {schedulerStatus?.in_flight ? "Running" : "Healthy"}
+                            </span>
+                            <p className="text-sm text-[var(--muted)]">
+                              {schedulerLastTick
+                                ? `${relativeTime(schedulerLastTick)} | ${schedulerHeartbeatLabel}`
+                                : schedulerHeartbeatLabel}
+                            </p>
+                          </div>
+                        </div>
                       <p className="hidden mt-1 text-xs text-[var(--muted)]">
                         {schedulerLastTick
                           ? `${relativeTime(schedulerLastTick)} • ${schedulerHeartbeatLabel}`
                           : schedulerHeartbeatLabel}
                       </p>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                      <div className="grid gap-3 sm:grid-cols-3 md:min-w-[23rem]">
+                        <div className="rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                             Interval
                           </p>
@@ -1377,7 +1392,7 @@ export function HistoryPage() {
                               : "Default"}
                           </p>
                         </div>
-                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                        <div className="rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                             Last duration
                           </p>
@@ -1387,7 +1402,7 @@ export function HistoryPage() {
                               : "-"}
                           </p>
                         </div>
-                        <div className="rounded-[1.1rem] bg-[rgba(var(--bg-rgb),0.2)] px-3 py-3">
+                        <div className="rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                             Campaigns processed
                           </p>
@@ -1396,6 +1411,7 @@ export function HistoryPage() {
                           </p>
                         </div>
                       </div>
+                    </div>
                       {schedulerStatus?.last_error ? (
                         <p className="mt-2 text-xs leading-6 text-[var(--danger)]">
                           {schedulerStatus.last_error}
