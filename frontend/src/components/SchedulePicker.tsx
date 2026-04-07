@@ -124,7 +124,11 @@ export function SchedulePicker({
 }) {
   const selectedDate = parseScheduledValue(value);
   const [visibleMonth, setVisibleMonth] = useState(() =>
-    startOfMonth(selectedDate ?? parseScheduledValue(defaultScheduledDateTimeValue()) ?? new Date()),
+    startOfMonth(
+      selectedDate ??
+        parseScheduledValue(defaultScheduledDateTimeValue()) ??
+        new Date(),
+    ),
   );
 
   useEffect(() => {
@@ -160,9 +164,14 @@ export function SchedulePicker({
   const today = new Date();
 
   const applyDay = (day: Date) => {
-    const source = selectedDate ?? parseScheduledValue(defaultScheduledDateTimeValue()) ?? new Date();
+    const source =
+      selectedDate ??
+      parseScheduledValue(defaultScheduledDateTimeValue()) ??
+      new Date();
     onChange(
-      toLocalDateTimeValue(withTime(day, source.getHours(), source.getMinutes())),
+      toLocalDateTimeValue(
+        withTime(day, source.getHours(), source.getMinutes()),
+      ),
     );
   };
 
@@ -185,7 +194,8 @@ export function SchedulePicker({
       label: "Today",
       icon: Sparkles,
       value: () => {
-        const base = parseScheduledValue(defaultScheduledDateTimeValue()) ?? new Date();
+        const base =
+          parseScheduledValue(defaultScheduledDateTimeValue()) ?? new Date();
         return toLocalDateTimeValue(base);
       },
     },
@@ -243,7 +253,7 @@ export function SchedulePicker({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="mt-5 grid gap-5">
         <div className="rounded-[1.5rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.2)] p-4">
           <div className="flex items-center justify-between gap-3">
             <button
@@ -325,7 +335,9 @@ export function SchedulePicker({
                           : "text-[var(--soft)]",
                     )}
                   >
-                    {isToday ? "Today" : day.toLocaleString([], { weekday: "short" })}
+                    {isToday
+                      ? "Today"
+                      : day.toLocaleString([], { weekday: "short" })}
                   </span>
                 </button>
               );
@@ -333,7 +345,7 @@ export function SchedulePicker({
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-[1.5rem] border border-[var(--line)] bg-[rgba(var(--bg-rgb),0.2)] p-4">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--soft)]">
               Quick dates
@@ -414,17 +426,19 @@ export function SchedulePicker({
             </div>
           </div>
 
-          {allowClear ? (
-            <button
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--muted)] transition hover:border-[rgba(var(--danger-rgb),0.24)] hover:text-[var(--danger)]"
-              disabled={disabled}
-              onClick={() => onChange("")}
-              type="button"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Clear schedule
-            </button>
-          ) : null}
+          <div className="lg:col-span-2">
+            {allowClear ? (
+              <button
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--surface)] px-4 py-2.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--muted)] transition hover:border-[rgba(var(--danger-rgb),0.24)] hover:text-[var(--danger)]"
+                disabled={disabled}
+                onClick={() => onChange("")}
+                type="button"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Clear schedule
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
