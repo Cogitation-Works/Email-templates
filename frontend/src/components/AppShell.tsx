@@ -488,7 +488,7 @@ export function AppShell({
               </p>
             </div>
             <div className="hidden h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-[var(--glass-line)] bg-[var(--surface-high)] text-xs font-black lg:flex">
-              {user?.full_name?.slice(0, 1).toUpperCase() ?? (
+              {user?.full_name?.slice(0, 1)?.toUpperCase() || (
                 <UserRound className="h-4 w-4" />
               )}
             </div>

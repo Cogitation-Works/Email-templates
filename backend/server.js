@@ -184,15 +184,32 @@ app.use((req, _res, next) => {
 });
 
 let database = null;
+
+async function runOptionalStartupTask(label, task) {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`[startup] Optional setup failed for ${label}:`, error);
+  }
+}
+
 const ready = (async () => {
   database = await connectDatabase();
   await ensureUserIndexes(database);
   await ensureAuthIndexes(database);
-  await ensureLeadIndexes(database);
-  await ensureLeadReplyIndexes(database);
-  await ensureScheduledEmailIndexes(database);
   await ensureSuperAdmin(database);
+  await runOptionalStartupTask("lead indexes", () => ensureLeadIndexes(database));
+  await runOptionalStartupTask("lead reply indexes", () =>
+    ensureLeadReplyIndexes(database),
+  );
+  await runOptionalStartupTask("scheduled email indexes", () =>
+    ensureScheduledEmailIndexes(database),
+  );
 })();
+
+ready.catch((error) => {
+  console.error("[startup] Backend initialization failed:", error);
+});
 
 const schedulerRuntime = {
   enabled: false,

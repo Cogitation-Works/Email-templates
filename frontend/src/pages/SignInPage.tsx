@@ -16,6 +16,7 @@ import {
 } from "react";
 import { Navigate } from "react-router-dom";
 
+import { ApiError } from "../api/client";
 import { Brand } from "../components/Brand";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useAuth } from "../context/AuthContext";
@@ -119,6 +120,10 @@ export function SignInPage() {
   const normalizeAuthError = (error: unknown, fallback: string) => {
     if (!(error instanceof Error)) {
       return fallback;
+    }
+
+    if (error instanceof ApiError && error.status >= 500) {
+      return "The server is not ready right now. Please try again in a moment.";
     }
 
     const message = error.message?.trim() || fallback;

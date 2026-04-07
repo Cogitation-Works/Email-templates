@@ -1002,23 +1002,119 @@ async function syncClientRepliesFromImap(db, { force = false } = {}) {
 }
 
 async function ensureLeadReplyIndexes(db) {
-  await db
-    .collection(LEAD_REPLY_COLLECTION)
-    .createIndex({ campaign_id: 1, received_at: -1 });
-  await db
-    .collection(LEAD_REPLY_COLLECTION)
-    .createIndex({ owner_user_id: 1, received_at: -1 });
-  await db
-    .collection(LEAD_REPLY_COLLECTION)
-    .createIndex({ mailbox_user: 1, mailbox_uid: 1 }, { unique: true });
-  await db.collection(LEAD_REPLY_COLLECTION).createIndex(
-    { message_id: 1 },
-    {
-      unique: true,
-      partialFilterExpression: { message_id: { $type: "string" } },
-    },
-  );
-  await db.collection(LEAD_REPLY_COLLECTION).createIndex({
+  const collection = db.collection(LEAD_REPLY_COLLECTION);
+  const expectedMessageIdPartial = { message_id: { $type: "string" } };
+
+  async function dropIndexIfPresent(indexName) {
+    try {
+      await collection.dropIndex(indexName);
+    } catch (error) {
+      const codeName = String(error?.codeName || "");
+      if (codeName !== "IndexNotFound") {
+        throw error;
+      }
+    }
+  }
+
+  async function normalizeDuplicateMessageIds() {
+    const duplicates = await collection
+      .aggregate([
+        { $match: { message_id: { $type: "string" } } },
+        { $sort: { received_at: -1, created_at: -1, _id: 1 } },
+        {
+          $group: {
+            _id: "$message_id",
+            ids: { $push: "$_id" },
+            count: { $sum: 1 },
+          },
+        },
+        { $match: { count: { $gt: 1 } } },
+      ])
+      .toArray();
+
+    for (const duplicate of duplicates) {
+      const conflictingIds = Array.isArray(duplicate?.ids)
+        ? duplicate.ids.slice(1).filter(Boolean)
+        : [];
+      if (!conflictingIds.length) {
+        continue;
+      }
+
+      await collection.updateMany(
+        { _id: { $in: conflictingIds } },
+        {
+          $set: {
+            message_id: null,
+            message_id_conflict: String(duplicate._id || ""),
+            updated_at: new Date(),
+          },
+        },
+      );
+    }
+  }
+
+  async function ensureMessageIdIndex() {
+    const indexes = await collection.indexes();
+    const currentMessageIdIndex = indexes.find(
+      (index) => index?.name === "message_id_1",
+    );
+    const currentPartial = JSON.stringify(
+      currentMessageIdIndex?.partialFilterExpression || null,
+    );
+    const expectedPartial = JSON.stringify(expectedMessageIdPartial);
+    const needsReset =
+      currentMessageIdIndex &&
+      (currentMessageIdIndex.unique !== true ||
+        Boolean(currentMessageIdIndex.sparse) ||
+        currentPartial !== expectedPartial);
+
+    if (needsReset) {
+      await dropIndexIfPresent("message_id_1");
+    }
+
+    await normalizeDuplicateMessageIds();
+
+    try {
+      await collection.createIndex(
+        { message_id: 1 },
+        {
+          unique: true,
+          partialFilterExpression: expectedMessageIdPartial,
+        },
+      );
+    } catch (error) {
+      const code = Number(error?.code);
+      const codeName = String(error?.codeName || "");
+      if (
+        code === 67 ||
+        code === 85 ||
+        code === 86 ||
+        code === 11000 ||
+        codeName === "CannotCreateIndex" ||
+        codeName === "IndexOptionsConflict" ||
+        codeName === "IndexKeySpecsConflict"
+      ) {
+        await dropIndexIfPresent("message_id_1");
+        await normalizeDuplicateMessageIds();
+        await collection.createIndex(
+          { message_id: 1 },
+          {
+            unique: true,
+            partialFilterExpression: expectedMessageIdPartial,
+          },
+        );
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  await collection.createIndex({ campaign_id: 1, received_at: -1 });
+  await collection.createIndex({ owner_user_id: 1, received_at: -1 });
+  await collection.createIndex({ mailbox_user: 1, mailbox_uid: 1 }, { unique: true });
+  await ensureMessageIdIndex();
+  await collection.createIndex({
     seen_by_user_ids: 1,
     received_at: -1,
   });

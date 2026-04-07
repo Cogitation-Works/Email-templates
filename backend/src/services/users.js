@@ -47,9 +47,29 @@ function serializeUser(document) {
 }
 
 async function ensureUserIndexes(db) {
-  await db
-    .collection(USERS_COLLECTION)
-    .createIndex({ email: 1 }, { unique: true });
+  try {
+    await db
+      .collection(USERS_COLLECTION)
+      .createIndex({ email: 1 }, { unique: true });
+  } catch (error) {
+    const code = Number(error?.code);
+    const codeName = String(error?.codeName || "");
+    const message = error instanceof Error ? error.message : String(error || "");
+
+    if (
+      code === 11000 ||
+      codeName === "IndexOptionsConflict" ||
+      codeName === "IndexKeySpecsConflict" ||
+      message.toLowerCase().includes("duplicate key")
+    ) {
+      console.warn(
+        "[startup] Could not enforce unique users.email index. Continuing with existing data.",
+      );
+    } else {
+      throw error;
+    }
+  }
+
   await db.collection(LOGS_COLLECTION).createIndex({ created_at: -1 });
 }
 
