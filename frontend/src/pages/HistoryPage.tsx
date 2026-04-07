@@ -1309,7 +1309,7 @@ export function HistoryPage() {
                 </div>
 
                 {historyViewMode === "sent" ? (
-                  <div className="grid grid-cols-4 gap-3 pt-2">
+                  <div className="grid gap-3 pt-2 sm:grid-cols-2">
                     <div className="min-h-[8.75rem] overflow-hidden rounded-[1.45rem] border border-[rgba(255,190,92,0.12)] bg-[linear-gradient(155deg,rgba(255,190,92,0.12),rgba(var(--bg-rgb),0.18)_72%)] px-4 py-4 shadow-[0_18px_32px_rgba(var(--shadow),0.12)]">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Scheduled
@@ -1354,13 +1354,13 @@ export function HistoryPage() {
                         Needs review
                       </p>
                     </div>
-                    <div className="col-span-4 overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(140deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.06)_42%,rgba(var(--bg-rgb),0.24)_100%)] px-4 py-4 shadow-[0_24px_44px_rgba(var(--shadow),0.14)]">
+                    <div className="overflow-hidden rounded-[1.6rem] border border-[var(--line)] bg-[linear-gradient(140deg,rgba(var(--accent-rgb),0.08),rgba(var(--secondary-rgb),0.06)_42%,rgba(var(--bg-rgb),0.24)_100%)] px-4 py-4 shadow-[0_24px_44px_rgba(var(--shadow),0.14)] sm:col-span-2">
                       <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                         Last scheduler tick
                       </p>
-                      <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="mt-3 flex flex-col gap-4">
                         <div className="space-y-2">
-                          <p className="text-lg font-black text-[var(--text)] sm:text-[1.35rem]">
+                          <p className="text-base font-black leading-tight text-[var(--text)] sm:text-[1.1rem]">
                             {schedulerLastTick
                               ? formatDateTime(schedulerLastTick)
                               : "No tick yet"}
@@ -1381,7 +1381,7 @@ export function HistoryPage() {
                           ? `${relativeTime(schedulerLastTick)} • ${schedulerHeartbeatLabel}`
                           : schedulerHeartbeatLabel}
                       </p>
-                      <div className="grid gap-3 sm:grid-cols-3 md:min-w-[23rem]">
+                      <div className="grid grid-cols-2 gap-3 2xl:grid-cols-3">
                         <div className="rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                             Interval
@@ -1402,7 +1402,7 @@ export function HistoryPage() {
                               : "-"}
                           </p>
                         </div>
-                        <div className="rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3">
+                        <div className="col-span-2 rounded-[1.15rem] border border-[rgba(var(--line-rgb),0.8)] bg-[rgba(var(--bg-rgb),0.22)] px-3 py-3 2xl:col-span-1">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--soft)]">
                             Campaigns processed
                           </p>
